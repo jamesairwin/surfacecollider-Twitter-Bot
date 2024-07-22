@@ -60,18 +60,18 @@ def split_text_into_chunks(text, chunk_size=140):
     return chunks
 
 def post_tweet(client, chunk):
-    while True:
-        try:
-            client.create_tweet(text=chunk)
-            print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
-            return True
-        except TweepyException as e:
-            if '429' in str(e):
-                print("Rate limit exceeded. Stopping script.")
-                return False
-            else:
-                print(f"An error occurred: {e}")
-                return False
+    try:
+        client.create_tweet(text=chunk)
+        print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+        return True
+    except TweepyException as e:
+        if '429' in str(e):
+            print("Rate limit exceeded. Sleeping for 15 minutes.")
+            time.sleep(15 * 60)  # Sleep for 15 minutes before retrying
+            return post_tweet(client, chunk)  # Retry posting the tweet
+        else:
+            print(f"An error occurred: {e}")
+            return False
 
 def read_last_entry_id(file_path):
     try:
