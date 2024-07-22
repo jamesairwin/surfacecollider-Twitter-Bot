@@ -8,6 +8,9 @@ import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG)
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -38,6 +41,12 @@ def fetch_latest_entry(cursor):
     logging.debug(f"Raw data from database: {result}")
     return result
 
+# Fetch all new entries from the database since the last processed ID
+def fetch_new_entries(cursor, last_entry_id):
+    query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
+    cursor.execute(query, (last_entry_id,))
+    return cursor.fetchall()
+
 # Convert Latin-1 bytes to UTF-8 string
 def convert_latin1_to_unicode(text):
     if isinstance(text, bytes):
@@ -67,6 +76,22 @@ def clean_text(text):
     logging.debug(f"Cleaned text: {ascii_text}")
     
     return ascii_text
+
+# Split the text into chunks of 140 characters, at natural whitespace intervals
+def split_text_into_chunks(text, chunk_size=140):
+    words = text.split()
+    chunks = []
+    chunk = words.pop(0)
+
+    for word in words:
+        if len(chunk) + len(word) + 1 > chunk_size:
+            chunks.append(chunk)
+            chunk = word
+        else:
+            chunk += ' ' + word
+
+    chunks.append(chunk)
+    return chunks
 
 # Post a tweet
 def post_tweet(client, chunk):
@@ -106,7 +131,7 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         latest_entry = fetch_latest_entry(cursor)
-        last_entry_id = latest_entry['id'] if latest_entry else None
+        last_entry_id = latest_entry['id'] if latest_entry else 0
         cursor.close()
         db_conn.close()
     except Exception as e:
