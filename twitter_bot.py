@@ -54,18 +54,20 @@ def clean_text(text):
     # Decode HTML entities
     text = unescape(text)
     
-    # Normalize to NFKC form to standardize characters
+    # Normalize the text to NFKC form
     normalized_text = unicodedata.normalize('NFKC', text)
     
-    # Replace common special characters
-    cleaned_text = re.sub(r'[“”]', '"', normalized_text)  # Replace fancy quotes with standard quotes
-    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes with standard apostrophes
+    # Replace fancy quotes and apostrophes
+    cleaned_text = re.sub(r'[“”]', '"', normalized_text)
+    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)
     
-    # Optionally remove non-ASCII characters and excessive whitespace
-    cleaned_text = re.sub(r'[^\x00-\x7F]+', '', cleaned_text)  # Remove non-ASCII characters
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()  # Replace multiple spaces with a single space
+    # Optionally remove any remaining non-ASCII characters
+    cleaned_text = re.sub(r'[^\x00-\x7F]', '', cleaned_text)
     
-    # Print the cleaned text for debugging
+    # Strip extra spaces and return
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    
+    # Debug logging
     logging.debug(f"Cleaned text: {cleaned_text}")
     
     return cleaned_text
