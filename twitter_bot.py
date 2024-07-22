@@ -100,6 +100,7 @@ def run_bot():
         cursor = db_conn.cursor(dictionary=True)
         latest_entry = fetch_latest_entry(cursor)
         last_entry_id = latest_entry['id'] if latest_entry else 0
+        logging.debug(f"Last entry ID: {last_entry_id}")
         cursor.close()
         db_conn.close()
     except Exception as e:
@@ -117,10 +118,13 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
+        logging.debug(f"New entries fetched: {new_entries}")
         
         for entry in new_entries:
             tweet_content = f"New entry added: {entry['comment']}"
+            logging.debug(f"Tweet content: {tweet_content}")
             chunks = split_text_into_chunks(tweet_content)
+            logging.debug(f"Tweet chunks: {chunks}")
 
             for chunk in chunks:
                 if tweet_count >= tweet_limit:
