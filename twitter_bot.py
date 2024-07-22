@@ -103,7 +103,19 @@ def run_bot():
     print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
     print(f"Current reset time: {reset_time}")
 
+    client = None
+
     try:
+        # Initialize the Tweepy client
+        client = tweepy.Client(
+            bearer_token=API_KEY,
+            consumer_key=API_KEY,
+            consumer_secret=API_SECRET_KEY,
+            access_token=ACCESS_TOKEN,
+            access_token_secret=ACCESS_TOKEN_SECRET
+        )
+
+        # Connect to the database and get the latest entry
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         
