@@ -39,16 +39,6 @@ def fetch_latest_entry(cursor):
     logging.debug(f"Raw data from database: {result}")
     return result
 
-# Fetch all new entries from the database since the last processed ID
-def fetch_new_entries(cursor, last_entry_id):
-    logging.debug(f"Fetching new entries with ID greater than {last_entry_id}")
-    query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
-    cursor.execute(query, (last_entry_id,))
-    new_entries = cursor.fetchall()
-    logging.debug(f"Fetched {len(new_entries)} new entries.")
-    logging.debug(f"New entries: {new_entries}")
-    return new_entries
-
 # Split the text into chunks of 140 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=140):
     words = text.split()
@@ -104,11 +94,14 @@ def run_bot():
         cursor = db_conn.cursor(dictionary=True)
         latest_entry = fetch_latest_entry(cursor)
         last_entry_id = latest_entry['id'] if latest_entry else 0
-        logging.debug(f"Last entry ID from latest entry: {last_entry_id}")
         cursor.close()
         db_conn.close()
     except Exception as e:
         logging.error(f"Error initializing the bot: {e}")
+        return
+
+    if not latest_entry:
+        logging.info("No entries found in the database.")
         return
 
     client = tweepy.Client(
@@ -119,47 +112,35 @@ def run_bot():
     )
 
     try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
-        
-        new_entries = fetch_new_entries(cursor, last_entry_id)
-        cursor.close()
-        db_conn.close()
+        tweet_content = f"New entry added: {latest_entry['comment']}"
+        logging.debug(f"Tweet content: {tweet_content}")
+        chunks = split_text_into_chunks(tweet_content)
+        logging.debug(f"Tweet chunks: {chunks}")
 
-        if not new_entries:
-            logging.info("No new entries to process.")
-            return
-
-        for entry in new_entries:
-            tweet_content = f"New entry added: {entry['comment']}"
-            logging.debug(f"Tweet content: {tweet_content}")
-            chunks = split_text_into_chunks(tweet_content)
-            logging.debug(f"Tweet chunks: {chunks}")
-
-            for chunk in chunks:
-                if tweet_count >= tweet_limit:
-                    now = datetime.now()
-                    if now >= reset_time:
-                        tweet_count = 0
-                        reset_time = now + timedelta(days=1)
-                        logging.info(f"Tweet limit reset. New reset time: {reset_time}")
-                    else:
-                        wait_time = (reset_time - now).total_seconds()
-                        logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                        time.sleep(wait_time)
-
-                logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
-                if post_tweet(client, chunk):
-                    tweet_count += 1
-                    logging.info(f"Tweet count: {tweet_count}")
-                    logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
-                    time.sleep(1)  # To avoid hitting rate limits
+        for chunk in chunks:
+            if tweet_count >= tweet_limit:
+                now = datetime.now()
+                if now >= reset_time:
+                    tweet_count = 0
+                    reset_time = now + timedelta(days=1)
+                    logging.info(f"Tweet limit reset. New reset time: {reset_time}")
                 else:
-                    logging.debug(f"Tweet failed: {chunk[:30]}...")
+                    wait_time = (reset_time - now).total_seconds()
+                    logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
+                    time.sleep(wait_time)
 
-            # Update the last processed ID
-            last_entry_id = entry['id']
-            logging.debug(f"Updated last entry ID to: {last_entry_id}")
+            logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
+            if post_tweet(client, chunk):
+                tweet_count += 1
+                logging.info(f"Tweet count: {tweet_count}")
+                logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
+                time.sleep(1)  # To avoid hitting rate limits
+            else:
+                logging.debug(f"Tweet failed: {chunk[:30]}...")
+
+        # Update the last processed ID
+        last_entry_id = latest_entry['id']
+        logging.debug(f"Updated last entry ID to: {last_entry_id}")
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
