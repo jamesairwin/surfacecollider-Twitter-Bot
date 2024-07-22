@@ -51,24 +51,20 @@ def fetch_new_entries(cursor, last_entry_id):
 
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
-    # Decode from Latin-1 to Unicode
-    if isinstance(text, bytes):
-        text = text.decode('latin1')
-    
     # Decode HTML entities
     text = unescape(text)
     
-    # Normalize to NFKC form
+    # Normalize the text to NFKC form
     normalized_text = unicodedata.normalize('NFKC', text)
     
-    # Replace fancy quotes and apostrophes with standard ones
-    cleaned_text = re.sub(r'[“”]', '"', normalized_text)  # Replace fancy quotes
-    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes
+    # Replace fancy quotes and apostrophes
+    cleaned_text = re.sub(r'[“”]', '"', normalized_text)
+    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)
     
-    # Optionally remove non-ASCII characters if required
-    # cleaned_text = re.sub(r'[^\x00-\x7F]', '', cleaned_text)
+    # Optionally remove any remaining non-ASCII characters
+    cleaned_text = re.sub(r'[^\x00-\x7F]', '', cleaned_text)
     
-    # Replace multiple spaces with a single space and strip leading/trailing spaces
+    # Strip extra spaces and return
     cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
     
     # Debug logging
