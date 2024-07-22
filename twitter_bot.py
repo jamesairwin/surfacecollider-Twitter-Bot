@@ -67,9 +67,8 @@ def post_tweet(client, chunk):
             return True
         except tweepy.errors.TweepyException as e:
             if '429' in str(e):
-                logging.warning("Rate limit exceeded. Waiting for 15 minutes...")
-                time.sleep(15 * 60)  # Wait for 15 minutes
-                retries += 1
+                logging.warning("Rate limit exceeded. Exiting...")
+                exit(1)  # Exit the script immediately
             else:
                 logging.error(f"An error occurred: {e}")
                 return False
