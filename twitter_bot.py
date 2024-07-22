@@ -50,9 +50,18 @@ def fetch_new_entries(cursor, last_entry_id):
 
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
+    # Normalize text to NFKD format to handle special characters
     normalized_text = unicodedata.normalize('NFKD', text)
+    
+    # Encode to ASCII ignoring non-ASCII characters and then decode back to string
     ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
+    
+    # Remove any remaining unwanted characters
     cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', ascii_text)
+    
+    # Print the cleaned text for debugging
+    logging.debug(f"Cleaned text: {cleaned_text}")
+    
     return cleaned_text
 
 # Split the text into chunks of 140 characters, at natural whitespace intervals
@@ -139,6 +148,8 @@ def run_bot():
             return
 
         cleaned_comment = clean_text(latest_entry['comment'])
+        logging.debug(f"Cleaned comment: {cleaned_comment}")  # Debug cleaned comment
+
         tweet_content = f"New entry added: {cleaned_comment}"
         chunks = split_text_into_chunks(tweet_content)
 
