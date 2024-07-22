@@ -71,7 +71,7 @@ def post_tweet(client, chunk):
             client.create_tweet(text=chunk)
             logging.info(f"Posted tweet: {chunk[:30]}...")
             return True
-        except TweepyException as e:
+        except tweepy.errors.TweepyException as e:
             if '429' in str(e):
                 logging.warning("Rate limit exceeded. Waiting for 15 minutes...")
                 time.sleep(15 * 60)  # Wait for 15 minutes
@@ -107,7 +107,6 @@ def run_bot():
         return
 
     client = tweepy.Client(
-        bearer_token=API_KEY, 
         consumer_key=API_KEY, 
         consumer_secret=API_SECRET_KEY, 
         access_token=ACCESS_TOKEN, 
@@ -135,10 +134,14 @@ def run_bot():
                         logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
                         time.sleep(wait_time)
 
+                logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
                 if post_tweet(client, chunk):
                     tweet_count += 1
-                    logging.info(f"Tweet count: {tweet_count}")  # Print tweet count
+                    logging.info(f"Tweet count: {tweet_count}")
+                    logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
                     time.sleep(1)  # To avoid hitting rate limits
+                else:
+                    logging.debug(f"Tweet failed: {chunk[:30]}...")
 
             last_entry_id = entry['id']
         
