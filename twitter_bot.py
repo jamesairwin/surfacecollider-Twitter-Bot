@@ -1,15 +1,14 @@
-import time
 import os
 import mysql.connector
 import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()  
+load_dotenv()
 
 # Fetch credentials from environment variables
 API_KEY = os.getenv('API_KEY')
@@ -66,30 +65,37 @@ def split_text_into_chunks(text, chunk_size=140):
 
 # Post a tweet
 def post_tweet(client, chunk):
-    while True:
-        try:
-            client.create_tweet(text=chunk)
-            print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
-            return True
-        except TweepyException as e:
-            if '429' in str(e):
-                print("Rate limit exceeded. Stopping the script.")
-                return False
-            else:
-                print(f"An error occurred: {e}")
-                return False
+    try:
+        client.create_tweet(text=chunk)
+        print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+        return True
+    except TweepyException as e:
+        if '429' in str(e):
+            print("Rate limit exceeded. Stopping the script.")
+            return False
+        else:
+            print(f"An error occurred: {e}")
+            return False
 
 # Function to read the last entry ID from a file
 def read_last_entry_id(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'r') as file:
-            return int(file.read().strip())
-    return None
+            content = file.read().strip()
+            if content:
+                return int(content)
+            else:
+                print("The file is empty.")
+                return None
+    else:
+        print("File does not exist.")
+        return None
 
 # Function to write the last entry ID to a file
 def write_last_entry_id(file_path, last_entry_id):
     with open(file_path, 'w') as file:
         file.write(str(last_entry_id))
+    print(f"Updated last processed entry ID to: {last_entry_id}")
 
 # Main function to run the bot
 def run_bot():
@@ -105,6 +111,9 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
+        
+        if not new_entries:
+            print("No new entries found.")
         
         for entry in new_entries:
             cleaned_comment = clean_text(entry['comment'])
