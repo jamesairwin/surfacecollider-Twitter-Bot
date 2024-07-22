@@ -1,3 +1,4 @@
+import sys
 import time
 import os
 import mysql.connector
@@ -6,6 +7,9 @@ import unicodedata
 import re
 from tweepy.errors import TweepyException
 from dotenv import load_dotenv
+
+# Force immediate flushing of print statements
+sys.stdout.flush = lambda: None
 
 # Load environment variables from .env file
 load_dotenv()
@@ -82,12 +86,15 @@ def post_tweet(client, chunk):
     try:
         client.create_tweet(text=chunk)
         print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+        sys.stdout.flush()
         return True
     except TweepyException as e:
         if '429' in str(e):
             print("Rate limit exceeded. Stopping further tweets.")
+            sys.stdout.flush()
         else:
             print(f"An error occurred: {e}")
+            sys.stdout.flush()
         return False
 
 # Main function to run the bot
@@ -96,10 +103,12 @@ def run_bot():
     tweet_count = 0
 
     print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
+    sys.stdout.flush()
 
     try:
         last_entry_id = read_last_entry_id()
         print(f"Last processed entry ID: {last_entry_id}")
+        sys.stdout.flush()
         if last_entry_id is None:
             db_conn = get_db_connection()
             cursor = db_conn.cursor(dictionary=True)
@@ -108,6 +117,7 @@ def run_bot():
             cursor.close()
             db_conn.close()
             print(f"Latest entry ID from DB: {last_entry_id}")
+            sys.stdout.flush()
 
         client = tweepy.Client(
             bearer_token=API_KEY, 
@@ -117,8 +127,10 @@ def run_bot():
             access_token_secret=ACCESS_TOKEN_SECRET
         )
         print("Twitter client initialized successfully.")
+        sys.stdout.flush()
     except Exception as e:
         print(f"Error initializing the bot: {e}")
+        sys.stdout.flush()
         return
 
     while True:
@@ -127,10 +139,12 @@ def run_bot():
             cursor = db_conn.cursor(dictionary=True)
             new_entries = fetch_new_entries(cursor, last_entry_id)
             print(f"Fetched {len(new_entries)} new entries from DB.")
+            sys.stdout.flush()
 
             for entry in new_entries:
                 if tweet_count >= tweet_limit:
                     print(f"Tweet limit of {tweet_limit} reached. Stopping further tweets.")
+                    sys.stdout.flush()
                     return  # Stop the script if the tweet limit is reached
 
                 cleaned_comment = clean_text(entry['comment'])
@@ -140,25 +154,31 @@ def run_bot():
                 for chunk in chunks:
                     if tweet_count >= tweet_limit:
                         print(f"Tweet limit of {tweet_limit} reached. Stopping further tweets.")
+                        sys.stdout.flush()
                         return  # Stop the script if the tweet limit is reached
 
                     if post_tweet(client, chunk):
                         tweet_count += 1
                         print(f"Tweet count: {tweet_count}")  # Print tweet count
+                        sys.stdout.flush()
                         time.sleep(1)  # To avoid hitting rate limits
 
                 last_entry_id = entry['id']
                 write_last_entry_id(last_entry_id)
                 print(f"Updated last_entry_id to {last_entry_id}")
+                sys.stdout.flush()
 
             cursor.close()
             db_conn.close()
             print("DB connection closed.")
+            sys.stdout.flush()
 
         except Exception as e:
             print(f"An error occurred: {e}")
+            sys.stdout.flush()
 
         print("Sleeping for 5 minutes.")
+        sys.stdout.flush()
         time.sleep(300)  # Check for new entries every 5 minutes
 
 if __name__ == "__main__":
