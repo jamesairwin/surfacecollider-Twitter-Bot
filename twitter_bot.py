@@ -39,8 +39,8 @@ def fetch_latest_entry(cursor):
     logging.debug(f"Raw data from database: {result}")
     return result
 
-# Split the text into chunks of 140 characters, at natural whitespace intervals
-def split_text_into_chunks(text, chunk_size=140):
+# Split the text into chunks of 280 characters, at natural whitespace intervals
+def split_text_into_chunks(text, chunk_size=280):
     words = text.split()
     chunks = []
     chunk = words.pop(0)
