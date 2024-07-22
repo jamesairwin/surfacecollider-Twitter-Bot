@@ -50,18 +50,16 @@ def fetch_new_entries(cursor, last_entry_id):
 
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
-    # Normalize the text to NFKD to handle special characters
-    normalized_text = unicodedata.normalize('NFKD', text)
-
-    # Encode the text to ASCII, ignoring non-ASCII characters, then decode it back
-    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
-
+    # Normalize text to NFKC format to handle special characters
+    normalized_text = unicodedata.normalize('NFKC', text)
+    
     # Replace common special characters with their standard counterparts
-    cleaned_text = re.sub(r'[“”]', '"', ascii_text)  # Replace fancy quotes with standard quotes
+    cleaned_text = re.sub(r'[“”]', '"', normalized_text)  # Replace fancy quotes with standard quotes
     cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes with standard apostrophes
     
-    # Optionally, remove any remaining unwanted characters
-    cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', cleaned_text)
+    # Optional: Remove unwanted characters and extra spaces
+    cleaned_text = re.sub(r'[^\x00-\x7F]+', '', cleaned_text)  # Remove non-ASCII characters
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()  # Replace multiple spaces with single space
     
     # Print the cleaned text for debugging
     logging.debug(f"Cleaned text: {cleaned_text}")
