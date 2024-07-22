@@ -5,11 +5,10 @@ import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()  
+load_dotenv()
 
 # Fetch credentials from environment variables
 API_KEY = os.getenv('API_KEY')
@@ -24,6 +23,20 @@ db_config = {
     'host': os.getenv('DB_HOST'),
     'database': os.getenv('DB_DATABASE')
 }
+
+LAST_ENTRY_ID_FILE = "last_entry_id.txt"
+
+# Read the last processed entry ID from the file
+def read_last_entry_id():
+    if os.path.exists(LAST_ENTRY_ID_FILE):
+        with open(LAST_ENTRY_ID_FILE, 'r') as file:
+            return int(file.read().strip())
+    return None
+
+# Write the last processed entry ID to the file
+def write_last_entry_id(last_entry_id):
+    with open(LAST_ENTRY_ID_FILE, 'w') as file:
+        file.write(str(last_entry_id))
 
 # Connect to the MySQL database
 def get_db_connection():
@@ -66,81 +79,80 @@ def split_text_into_chunks(text, chunk_size=140):
 
 # Post a tweet
 def post_tweet(client, chunk):
-    while True:
-        try:
-            client.create_tweet(text=chunk)
-            print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
-            return True
-        except TweepyException as e:
-            if '429' in str(e):
-                print("Rate limit exceeded. Waiting for 15 minutes...")
-                time.sleep(15 * 60)  # Wait for 15 minutes
-            else:
-                print(f"An error occurred: {e}")
-                return False
+    try:
+        client.create_tweet(text=chunk)
+        print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+        return True
+    except TweepyException as e:
+        if '429' in str(e):
+            print("Rate limit exceeded. Stopping further tweets.")
+        else:
+            print(f"An error occurred: {e}")
+        return False
 
 # Main function to run the bot
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
-    reset_time = datetime.now() + timedelta(days=1)  # Reset in 24 hours
 
     print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
-    print(f"Current reset time: {reset_time}")
 
     try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
-        latest_entry = fetch_latest_entry(cursor)
-        last_entry_id = latest_entry['id'] if latest_entry else None
-        cursor.close()
-        db_conn.close()
+        last_entry_id = read_last_entry_id()
+        if last_entry_id is None:
+            db_conn = get_db_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            latest_entry = fetch_latest_entry(cursor)
+            last_entry_id = latest_entry['id'] if latest_entry else 0
+            cursor.close()
+            db_conn.close()
+
+        client = tweepy.Client(
+            bearer_token=API_KEY, 
+            consumer_key=API_KEY, 
+            consumer_secret=API_SECRET_KEY, 
+            access_token=ACCESS_TOKEN, 
+            access_token_secret=ACCESS_TOKEN_SECRET
+        )
     except Exception as e:
         print(f"Error initializing the bot: {e}")
         return
 
-    client = tweepy.Client(
-        bearer_token=API_KEY, 
-        consumer_key=API_KEY, 
-        consumer_secret=API_SECRET_KEY, 
-        access_token=ACCESS_TOKEN, 
-        access_token_secret=ACCESS_TOKEN_SECRET
-    )
+    while True:
+        try:
+            db_conn = get_db_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            new_entries = fetch_new_entries(cursor, last_entry_id)
 
-    try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
-        new_entries = fetch_new_entries(cursor, last_entry_id)
-        
-        for entry in new_entries:
-            cleaned_comment = clean_text(entry['comment'])
-            tweet_content = f"New entry added: {cleaned_comment}"
-            chunks = split_text_into_chunks(tweet_content)
-
-            for chunk in chunks:
+            for entry in new_entries:
                 if tweet_count >= tweet_limit:
-                    now = datetime.now()
-                    if now >= reset_time:
-                        tweet_count = 0
-                        reset_time = now + timedelta(days=1)
-                        print(f"Tweet limit reset. New reset time: {reset_time}")
-                    else:
-                        wait_time = (reset_time - now).total_seconds()
-                        print(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                        time.sleep(wait_time)
+                    print(f"Tweet limit of {tweet_limit} reached. Stopping further tweets.")
+                    return  # Stop the script if the tweet limit is reached
 
-                if post_tweet(client, chunk):
-                    tweet_count += 1
-                    print(f"Tweet count: {tweet_count}")  # Print tweet count
-                    time.sleep(1)  # To avoid hitting rate limits
+                cleaned_comment = clean_text(entry['comment'])
+                tweet_content = f"New entry added: {cleaned_comment}"
+                chunks = split_text_into_chunks(tweet_content)
 
-            last_entry_id = entry['id']
-        
-        cursor.close()
-        db_conn.close()
-    
-    except Exception as e:
-        print(f"An error occurred: {e}")
+                for chunk in chunks:
+                    if tweet_count >= tweet_limit:
+                        print(f"Tweet limit of {tweet_limit} reached. Stopping further tweets.")
+                        return  # Stop the script if the tweet limit is reached
+
+                    if post_tweet(client, chunk):
+                        tweet_count += 1
+                        print(f"Tweet count: {tweet_count}")  # Print tweet count
+                        time.sleep(1)  # To avoid hitting rate limits
+
+                last_entry_id = entry['id']
+                write_last_entry_id(last_entry_id)
+
+            cursor.close()
+            db_conn.close()
+
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+        time.sleep(300)  # Check for new entries every 5 minutes
 
 if __name__ == "__main__":
     run_bot()
