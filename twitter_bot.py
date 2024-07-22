@@ -73,18 +73,18 @@ def split_text_into_chunks(text, chunk_size=140):
 
 # Post a tweet
 def post_tweet(client, chunk):
-    while True:
-        try:
-            client.create_tweet(text=chunk)
-            logging.info(f"Posted tweet: {chunk[:30]}...")  # Log the beginning of the tweet for confirmation
-            return True
-        except TweepyException as e:
-            if '429' in str(e):
-                logging.warning("Rate limit exceeded. Waiting for 15 minutes...")
-                time.sleep(15 * 60)  # Wait for 15 minutes
-            else:
-                logging.error(f"An error occurred: {e}")
-                return False
+    try:
+        response = client.create_tweet(text=chunk)
+        logging.info(f"Posted tweet: {chunk[:30]}...")  # Log the beginning of the tweet for confirmation
+        return True
+    except TweepyException as e:
+        # Check if the error is due to rate limit
+        if '429' in str(e):
+            logging.warning("Rate limit exceeded. Stopping the script.")
+            return False
+        else:
+            logging.error(f"An error occurred: {e}")
+            return False
 
 # Load the last processed entry ID from the file
 def load_last_entry_id():
@@ -154,10 +154,13 @@ def run_bot():
                     logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
                     time.sleep(wait_time)
 
-            if post_tweet(client, chunk):
-                tweet_count += 1
-                logging.info(f"Tweet count: {tweet_count}")  # Log tweet count
-                time.sleep(1)  # To avoid hitting rate limits
+            if not post_tweet(client, chunk):
+                logging.info("Stopping the bot due to rate limit.")
+                break
+
+            tweet_count += 1
+            logging.info(f"Tweet count: {tweet_count}")  # Log tweet count
+            time.sleep(1)  # To avoid hitting rate limits
 
         # Update the last processed entry ID
         save_last_entry_id(latest_entry['id'])
