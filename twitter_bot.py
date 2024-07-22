@@ -83,10 +83,6 @@ def post_tweet(client, chunk):
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
-    reset_time = datetime.now() + timedelta(days=1)  # Reset in 24 hours
-
-    print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
-    print(f"Current reset time: {reset_time}")
 
     try:
         db_conn = get_db_connection()
@@ -107,40 +103,49 @@ def run_bot():
         access_token_secret=ACCESS_TOKEN_SECRET
     )
 
-    try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
-        new_entries = fetch_new_entries(cursor, last_entry_id)
-        
-        for entry in new_entries:
-            cleaned_comment = clean_text(entry['comment'])
-            tweet_content = f"New entry added: {cleaned_comment}"
-            chunks = split_text_into_chunks(tweet_content)
+    last_tweet_time = datetime.now()  # Initial last tweet time
+    reset_interval = timedelta(days=1)  # 24-hour reset interval
 
-            for chunk in chunks:
-                if tweet_count >= tweet_limit:
+    while True:
+        try:
+            db_conn = get_db_connection()
+            cursor = db_conn.cursor(dictionary=True)
+            new_entries = fetch_new_entries(cursor, last_entry_id)
+            
+            for entry in new_entries:
+                cleaned_comment = clean_text(entry['comment'])
+                tweet_content = f"New entry added: {cleaned_comment}"
+                chunks = split_text_into_chunks(tweet_content)
+
+                for chunk in chunks:
                     now = datetime.now()
-                    if now >= reset_time:
+                    elapsed_since_last_tweet = now - last_tweet_time
+                    remaining_time = reset_interval - elapsed_since_last_tweet
+
+                    if tweet_count >= tweet_limit:
+                        if remaining_time > timedelta(0):
+                            print(f"Tweet limit reached. Waiting for {remaining_time.total_seconds() / 60:.2f} minutes.")
+                            time.sleep(remaining_time.total_seconds())
+                        
                         tweet_count = 0
-                        reset_time = now + timedelta(days=1)
-                        print(f"Tweet limit reset. New reset time: {reset_time}")
-                    else:
-                        wait_time = (reset_time - now).total_seconds()
-                        print(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                        time.sleep(wait_time)
+                        last_tweet_time = datetime.now()
+                        print(f"Tweet limit reset. New last tweet time: {last_tweet_time}")
 
-                if post_tweet(client, chunk):
-                    tweet_count += 1
-                    print(f"Tweet count: {tweet_count}")  # Print tweet count
-                    time.sleep(1)  # To avoid hitting rate limits
+                    if post_tweet(client, chunk):
+                        tweet_count += 1
+                        print(f"Tweet count: {tweet_count}")  # Print tweet count
+                        last_tweet_time = datetime.now()  # Update last tweet time
+                        time.sleep(1)  # To avoid hitting rate limits
 
-            last_entry_id = entry['id']
+                last_entry_id = entry['id']
+            
+            cursor.close()
+            db_conn.close()
         
-        cursor.close()
-        db_conn.close()
-    
-    except Exception as e:
-        print(f"An error occurred: {e}")
+        except Exception as e:
+            print(f"An error occurred: {e}")
+
+        time.sleep(300)  # Check for new entries every 5 minutes
 
 if __name__ == "__main__":
     run_bot()
