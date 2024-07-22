@@ -49,22 +49,29 @@ def fetch_new_entries(cursor, last_entry_id):
     cursor.execute(query, (last_entry_id,))
     return cursor.fetchall()
 
+
+# Convert Latin-1 bytes to UTF-8 string
+def convert_latin1_to_utf8(text):
+    if isinstance(text, bytes):
+        return text.decode('latin1')
+    return text
+
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
+    # Convert from Latin-1 to UTF-8
+    text = convert_latin1_to_utf8(text)
+    
     # Decode HTML entities
     text = unescape(text)
     
-    # Normalize the text to NFKC form
+    # Normalize to NFKC form
     normalized_text = unicodedata.normalize('NFKC', text)
     
-    # Replace fancy quotes and apostrophes
-    cleaned_text = re.sub(r'[“”]', '"', normalized_text)
-    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)
+    # Replace fancy quotes and apostrophes with standard ones
+    cleaned_text = re.sub(r'[“”]', '"', normalized_text)  # Replace fancy quotes
+    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes
     
-    # Optionally remove any remaining non-ASCII characters
-    cleaned_text = re.sub(r'[^\x00-\x7F]', '', cleaned_text)
-    
-    # Strip extra spaces and return
+    # Replace multiple spaces with a single space and strip leading/trailing spaces
     cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
     
     # Debug logging
