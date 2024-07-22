@@ -1,17 +1,12 @@
-import time
-import os
-import mysql.connector
-import tweepy
 import unicodedata
 import re
-from tweepy.errors import TweepyException
+import mysql.connector
+import tweepy
+import os
+import logging
+import time
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
-import logging
-from html import unescape
-
-# Configure logging
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables from .env file
 load_dotenv()
@@ -27,11 +22,9 @@ db_config = {
     'user': os.getenv('DB_USER'),
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_DATABASE')
+    'database': os.getenv('DB_DATABASE'),
+    'charset': 'latin1'  # Ensure this is set to latin1
 }
-
-# File to store the last processed entry ID
-LAST_ENTRY_ID_FILE = 'last_entry_id.txt'
 
 # Connect to the MySQL database
 def get_db_connection():
@@ -41,78 +34,64 @@ def get_db_connection():
 def fetch_latest_entry(cursor):
     query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
     cursor.execute(query)
-    return cursor.fetchone()
+    result = cursor.fetchone()
+    logging.debug(f"Raw data from database: {result}")
+    return result
 
-# Fetch all new entries from the database since the last processed ID
-def fetch_new_entries(cursor, last_entry_id):
-    query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
-    cursor.execute(query, (last_entry_id,))
-    return cursor.fetchall()
+# Convert Latin-1 bytes to UTF-8 string
+def convert_latin1_to_unicode(text):
+    if isinstance(text, bytes):
+        return text.decode('latin1')
+    return text
 
-def clean_text(text):
-    # Decode HTML entities
-    text = unescape(text)
+# Convert Unicode text to ASCII, ignoring non-ASCII characters
+def convert_unicode_to_ascii(text):
+    # Normalize Unicode text to NFC form and encode to ASCII
+    normalized_text = unicodedata.normalize('NFC', text)
+    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
     
-    # Normalize the text to NFKC form
-    normalized_text = unicodedata.normalize('NFKC', text)
-    
-    # Replace fancy quotes and apostrophes
-    cleaned_text = re.sub(r'[“”]', '"', normalized_text)
-    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)
-    
-    # Optionally remove any remaining non-ASCII characters
-    cleaned_text = re.sub(r'[^\x00-\x7F]', '', cleaned_text)
-    
-    # Strip extra spaces and return
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
-    
-    # Debug logging
-    logging.debug(f"Cleaned text: {cleaned_text}")
+    # Replace multiple spaces with a single space and strip leading/trailing spaces
+    cleaned_text = re.sub(r'\s+', ' ', ascii_text).strip()
     
     return cleaned_text
 
-# Split the text into chunks of 140 characters, at natural whitespace intervals
-def split_text_into_chunks(text, chunk_size=140):
-    words = text.split()
-    chunks = []
-    chunk = words.pop(0)
-
-    for word in words:
-        if len(chunk) + len(word) + 1 > chunk_size:
-            chunks.append(chunk)
-            chunk = word
-        else:
-            chunk += ' ' + word
-
-    chunks.append(chunk)
-    return chunks
+# Clean and process the text
+def clean_text(text):
+    # Convert from Latin-1 to Unicode
+    text = convert_latin1_to_unicode(text)
+    
+    # Convert from Unicode to ASCII
+    ascii_text = convert_unicode_to_ascii(text)
+    
+    # Debug logging
+    logging.debug(f"Cleaned text: {ascii_text}")
+    
+    return ascii_text
 
 # Post a tweet
 def post_tweet(client, chunk):
-    try:
-        response = client.create_tweet(text=chunk)
-        logging.info(f"Posted tweet: {chunk[:30]}...")  # Log the beginning of the tweet for confirmation
-        return True
-    except TweepyException as e:
-        # Check if the error is due to rate limit
-        if '429' in str(e):
-            logging.warning("Rate limit exceeded. Stopping the script.")
-            return False
-        else:
-            logging.error(f"An error occurred: {e}")
+    max_retries = 5
+    retries = 0
+
+    while retries < max_retries:
+        try:
+            client.create_tweet(text=chunk)
+            logging.info(f"Posted tweet: {chunk[:30]}...")
+            return True
+        except TweepyException as e:
+            if '429' in str(e):
+                logging.warning("Rate limit exceeded. Waiting for 15 minutes...")
+                time.sleep(15 * 60)  # Wait for 15 minutes
+                retries += 1
+            else:
+                logging.error(f"An error occurred: {e}")
+                return False
+        except Exception as e:
+            logging.error(f"Unexpected error: {e}")
             return False
 
-# Load the last processed entry ID from the file
-def load_last_entry_id():
-    if os.path.exists(LAST_ENTRY_ID_FILE):
-        with open(LAST_ENTRY_ID_FILE, 'r') as file:
-            return int(file.read().strip())
-    return None
-
-# Save the last processed entry ID to the file
-def save_last_entry_id(entry_id):
-    with open(LAST_ENTRY_ID_FILE, 'w') as file:
-        file.write(str(entry_id))
+    logging.error("Max retries reached. Unable to post tweet.")
+    return False
 
 # Main function to run the bot
 def run_bot():
@@ -123,71 +102,57 @@ def run_bot():
     logging.info(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
     logging.info(f"Current reset time: {reset_time}")
 
-    client = None
-
     try:
-        # Initialize the Tweepy client
-        client = tweepy.Client(
-            bearer_token=API_KEY,
-            consumer_key=API_KEY,
-            consumer_secret=API_SECRET_KEY,
-            access_token=ACCESS_TOKEN,
-            access_token_secret=ACCESS_TOKEN_SECRET
-        )
-
-        # Connect to the database and get the latest entry
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
-        
-        # Load the last processed entry ID
-        last_entry_id = load_last_entry_id()
-        logging.debug(f"Loaded last entry ID: {last_entry_id}")
-        
-        # Fetch the latest entry from the database
         latest_entry = fetch_latest_entry(cursor)
-        logging.debug(f"Fetched latest entry: {latest_entry}")
-
-        # If no entries in the database or the latest entry is the same as the last processed one, exit
-        if not latest_entry or (last_entry_id and latest_entry['id'] == last_entry_id):
-            logging.info("No new entries to process.")
-            cursor.close()
-            db_conn.close()
-            return
-
-        # Clean the comment and debug the cleaned text
-        cleaned_comment = clean_text(latest_entry['comment'])
-        logging.debug(f"Cleaned comment: {cleaned_comment}")
-
-        tweet_content = f"New entry added: {cleaned_comment}"
-        chunks = split_text_into_chunks(tweet_content)
-
-        for chunk in chunks:
-            if tweet_count >= tweet_limit:
-                now = datetime.now()
-                if now >= reset_time:
-                    tweet_count = 0
-                    reset_time = now + timedelta(days=1)
-                    logging.info(f"Tweet limit reset. New reset time: {reset_time}")
-                else:
-                    wait_time = (reset_time - now).total_seconds()
-                    logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                    time.sleep(wait_time)
-
-            if not post_tweet(client, chunk):
-                logging.info("Stopping the bot due to rate limit.")
-                break
-
-            tweet_count += 1
-            logging.info(f"Tweet count: {tweet_count}")  # Log tweet count
-            time.sleep(1)  # To avoid hitting rate limits
-
-        # Update the last processed entry ID
-        save_last_entry_id(latest_entry['id'])
-        logging.info(f"Updated last entry ID to {latest_entry['id']}")
-
+        last_entry_id = latest_entry['id'] if latest_entry else None
         cursor.close()
         db_conn.close()
+    except Exception as e:
+        logging.error(f"Error initializing the bot: {e}")
+        return
 
+    client = tweepy.Client(
+        bearer_token=API_KEY, 
+        consumer_key=API_KEY, 
+        consumer_secret=API_SECRET_KEY, 
+        access_token=ACCESS_TOKEN, 
+        access_token_secret=ACCESS_TOKEN_SECRET
+    )
+
+    try:
+        db_conn = get_db_connection()
+        cursor = db_conn.cursor(dictionary=True)
+        new_entries = fetch_new_entries(cursor, last_entry_id)
+        
+        for entry in new_entries:
+            cleaned_comment = clean_text(entry['comment'])
+            tweet_content = f"New entry added: {cleaned_comment}"
+            chunks = split_text_into_chunks(tweet_content)
+
+            for chunk in chunks:
+                if tweet_count >= tweet_limit:
+                    now = datetime.now()
+                    if now >= reset_time:
+                        tweet_count = 0
+                        reset_time = now + timedelta(days=1)
+                        logging.info(f"Tweet limit reset. New reset time: {reset_time}")
+                    else:
+                        wait_time = (reset_time - now).total_seconds()
+                        logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
+                        time.sleep(wait_time)
+
+                if post_tweet(client, chunk):
+                    tweet_count += 1
+                    logging.info(f"Tweet count: {tweet_count}")  # Print tweet count
+                    time.sleep(1)  # To avoid hitting rate limits
+
+            last_entry_id = entry['id']
+        
+        cursor.close()
+        db_conn.close()
+    
     except Exception as e:
         logging.error(f"An error occurred: {e}")
 
