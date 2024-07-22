@@ -96,14 +96,16 @@ def run_bot():
 
     print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
 
+    # Read the last processed entry ID
     last_entry_id = read_last_entry_id(last_entry_id_file)
     print(f"Last processed entry ID: {last_entry_id}")
 
     try:
+        # Connect to the database and fetch new entries
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
-        
+
         if not new_entries:
             print("No new entries found.")
             return
@@ -124,12 +126,12 @@ def run_bot():
             for chunk in chunks:
                 if tweet_count >= tweet_limit:
                     print(f"Tweet limit reached. Exiting script.")
-                    return
+                    return  # Exit the script
 
                 success = post_tweet(client, chunk)
                 if not success:
                     print("Failed to post tweet. Stopping script.")
-                    return
+                    return  # Exit the script
 
                 tweet_count += 1
                 print(f"Tweet count: {tweet_count}")  # Print tweet count
@@ -137,13 +139,12 @@ def run_bot():
 
             last_entry_id = entry['id']
             write_last_entry_id(last_entry_id_file, last_entry_id)
-        
+
         cursor.close()
         db_conn.close()
     
     except Exception as e:
         print(f"An error occurred: {e}")
-
 
 if __name__ == "__main__":
     run_bot()
