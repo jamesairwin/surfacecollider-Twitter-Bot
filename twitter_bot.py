@@ -114,6 +114,8 @@ def run_bot():
 
         if not new_entries:
             print("No new entries found.")
+            cursor.close()
+            db_conn.close()
             return
 
         client = tweepy.Client(
@@ -132,11 +134,15 @@ def run_bot():
             for chunk in chunks:
                 if tweet_count >= tweet_limit:
                     print(f"Tweet limit reached. Exiting script.")
+                    cursor.close()
+                    db_conn.close()
                     return
 
                 success = post_tweet(client, chunk)
                 if not success:
                     print("Failed to post tweet. Stopping script.")
+                    cursor.close()
+                    db_conn.close()
                     return
 
                 tweet_count += 1
@@ -151,6 +157,9 @@ def run_bot():
     
     except Exception as e:
         print(f"An error occurred: {e}")
+        # Ensure resources are closed even in case of an error
+        if 'db_conn' in locals():
+            db_conn.close()
 
 if __name__ == "__main__":
     run_bot()
