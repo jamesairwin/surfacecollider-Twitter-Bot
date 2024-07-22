@@ -126,10 +126,14 @@ def run_bot():
                     print(f"Tweet limit reached. Exiting script.")
                     return
 
-                if post_tweet(client, chunk):
-                    tweet_count += 1
-                    print(f"Tweet count: {tweet_count}")  # Print tweet count
-                    time.sleep(1)  # To avoid hitting rate limits
+                success = post_tweet(client, chunk)
+                if not success:
+                    print("Failed to post tweet. Stopping script.")
+                    return
+
+                tweet_count += 1
+                print(f"Tweet count: {tweet_count}")  # Print tweet count
+                time.sleep(1)  # To avoid hitting rate limits
 
             last_entry_id = entry['id']
             write_last_entry_id(last_entry_id_file, last_entry_id)
@@ -139,6 +143,7 @@ def run_bot():
     
     except Exception as e:
         print(f"An error occurred: {e}")
+
 
 if __name__ == "__main__":
     run_bot()
