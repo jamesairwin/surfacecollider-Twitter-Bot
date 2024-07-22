@@ -1,10 +1,11 @@
+import time
 import os
 import mysql.connector
 import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
-from datetime import datetime
+from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -24,30 +25,25 @@ db_config = {
     'database': os.getenv('DB_DATABASE')
 }
 
-# Connect to the MySQL database
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-# Fetch the latest entry from the database
 def fetch_latest_entry(cursor):
     query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
     cursor.execute(query)
     return cursor.fetchone()
 
-# Fetch all new entries from the database since the last processed ID
 def fetch_new_entries(cursor, last_entry_id):
     query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
     cursor.execute(query, (last_entry_id,))
     return cursor.fetchall()
 
-# Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
     normalized_text = unicodedata.normalize('NFKD', text)
     ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
     cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', ascii_text)
     return cleaned_text
 
-# Split the text into chunks of 140 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=140):
     words = text.split()
     chunks = []
@@ -63,52 +59,45 @@ def split_text_into_chunks(text, chunk_size=140):
     chunks.append(chunk)
     return chunks
 
-# Post a tweet
 def post_tweet(client, chunk):
-    try:
-        client.create_tweet(text=chunk)
-        print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
-        return True
-    except TweepyException as e:
-        if '429' in str(e):
-            print("Rate limit exceeded. Stopping the script.")
-            return False
-        else:
-            print(f"An error occurred: {e}")
-            return False
-
-# Function to read the last entry ID from a file
-def read_last_entry_id(file_path):
-    print(f"Attempting to read last entry ID from file: {file_path}")
-    if os.path.exists(file_path):
-        print("File exists.")
-        with open(file_path, 'r') as file:
-            content = file.read().strip()
-            if content:
-                return int(content)
+    while True:
+        try:
+            client.create_tweet(text=chunk)
+            print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+            return True
+        except TweepyException as e:
+            if '429' in str(e):
+                print("Rate limit exceeded. Stopping script.")
+                return False
             else:
-                print("The file is empty.")
-                return None
-    else:
-        print("File does not exist.")
-        return None
+                print(f"An error occurred: {e}")
+                return False
 
-# Function to write the last entry ID to a file
+def read_last_entry_id(file_path):
+    try:
+        with open(file_path, 'r') as f:
+            content = f.read().strip()
+            return int(content)
+    except ValueError:
+        print("File content is invalid; defaulting to ID 0.")
+        return 0
+    except FileNotFoundError:
+        print("File not found; defaulting to ID 0.")
+        return 0
+
 def write_last_entry_id(file_path, last_entry_id):
-    print(f"Attempting to write last entry ID to file: {file_path}")
-    with open(file_path, 'w') as file:
-        file.write(str(last_entry_id))
-    print(f"Updated last processed entry ID to: {last_entry_id}")
+    with open(file_path, 'w') as f:
+        f.write(str(last_entry_id))
 
-# Main function to run the bot
 def run_bot():
+    last_entry_id_file = 'last_entry_id.txt'
     tweet_limit = 50
     tweet_count = 0
-    last_entry_id_file = "last_entry_id.txt"
 
-    # Read the last processed entry ID from file
+    print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
+
     last_entry_id = read_last_entry_id(last_entry_id_file)
-    print(f"Starting bot. Last processed entry ID: {last_entry_id}")
+    print(f"Last processed entry ID: {last_entry_id}")
 
     try:
         db_conn = get_db_connection()
@@ -117,7 +106,16 @@ def run_bot():
         
         if not new_entries:
             print("No new entries found.")
-        
+            return
+
+        client = tweepy.Client(
+            bearer_token=API_KEY, 
+            consumer_key=API_KEY, 
+            consumer_secret=API_SECRET_KEY, 
+            access_token=ACCESS_TOKEN, 
+            access_token_secret=ACCESS_TOKEN_SECRET
+        )
+
         for entry in new_entries:
             cleaned_comment = clean_text(entry['comment'])
             tweet_content = f"New entry added: {cleaned_comment}"
@@ -125,7 +123,7 @@ def run_bot():
 
             for chunk in chunks:
                 if tweet_count >= tweet_limit:
-                    print("Tweet limit reached. Stopping the script.")
+                    print(f"Tweet limit reached. Exiting script.")
                     return
 
                 if post_tweet(client, chunk):
