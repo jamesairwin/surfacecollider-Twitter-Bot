@@ -1,40 +1,40 @@
-name: Twitter Bot Deployment
+name: Deploy Twitter Bot
 
 on:
-  push:
-    branches:
-      - main
   schedule:
-    - cron: '*/5 * * * *'  # Runs every 5 minutes
+    - cron: "*/5 * * * *"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Check out the repository
-      uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Run Twitter Bot
-      env:
-        API_KEY: ${{ secrets.API_KEY }}
-        API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
-        ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-        ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
-        DB_USER: ${{ secrets.DB_USER }}
-        DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-        DB_HOST: ${{ secrets.DB_HOST }}
-        DB_DATABASE: ${{ secrets.DB_DATABASE }}
-      run: |
-        python twitter_bot.py
-      shell: bash
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Twitter Bot
+        run: python twitter_bot.py
+        env:
+          API_KEY: ${{ secrets.API_KEY }}
+          API_SECRET_KEY: ${{ secrets.API_SECRET_KEY }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+          DB_USER: ${{ secrets.DB_USER }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
