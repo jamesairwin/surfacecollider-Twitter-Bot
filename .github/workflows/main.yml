@@ -6,6 +6,7 @@ on:
       - main
   schedule:
     - cron: '*/5 * * * *'  # Runs every 5 minutes
+  workflow_dispatch:  # Allows manual triggering of the workflow
 
 jobs:
   deploy:
