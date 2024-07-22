@@ -27,11 +27,12 @@ db_config = {
     'charset': 'latin1'  # Set charset to latin1
 }
 
-# Connect to the MySQL database
+# Path to the file storing the last tweeted entry ID
+LAST_TWEETED_ID_FILE = 'last_tweeted_id.txt'
+
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-# Fetch the latest entry from the database
 def fetch_latest_entry(cursor):
     query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
     cursor.execute(query)
@@ -39,7 +40,6 @@ def fetch_latest_entry(cursor):
     logging.debug(f"Raw data from database: {result}")
     return result
 
-# Split the text into chunks of 280 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=280):
     words = text.split()
     chunks = []
@@ -55,7 +55,6 @@ def split_text_into_chunks(text, chunk_size=280):
     chunks.append(chunk)
     return chunks
 
-# Post a tweet
 def post_tweet(client, chunk):
     max_retries = 5
     retries = 0
@@ -79,7 +78,16 @@ def post_tweet(client, chunk):
     logging.error("Max retries reached. Unable to post tweet.")
     return False
 
-# Main function to run the bot
+def read_last_tweeted_id():
+    if os.path.exists(LAST_TWEETED_ID_FILE):
+        with open(LAST_TWEETED_ID_FILE, 'r') as file:
+            return int(file.read().strip())
+    return None
+
+def write_last_tweeted_id(tweet_id):
+    with open(LAST_TWEETED_ID_FILE, 'w') as file:
+        file.write(str(tweet_id))
+
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
@@ -92,7 +100,6 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         latest_entry = fetch_latest_entry(cursor)
-        last_entry_id = latest_entry['id'] if latest_entry else 0
         cursor.close()
         db_conn.close()
     except Exception as e:
@@ -101,6 +108,11 @@ def run_bot():
 
     if not latest_entry:
         logging.info("No entries found in the database.")
+        return
+
+    last_tweeted_id = read_last_tweeted_id()
+    if last_tweeted_id == latest_entry['id']:
+        logging.info("Latest entry has already been tweeted.")
         return
 
     client = tweepy.Client(
@@ -137,9 +149,8 @@ def run_bot():
             else:
                 logging.debug(f"Tweet failed: {chunk[:30]}...")
 
-        # Update the last processed ID
-        last_entry_id = latest_entry['id']
-        logging.debug(f"Updated last entry ID to: {last_entry_id}")
+        write_last_tweeted_id(latest_entry['id'])
+        logging.debug(f"Updated last tweeted ID to: {latest_entry['id']}")
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
