@@ -15,8 +15,8 @@ def check_file_creation_and_permissions():
     else:
         print(f"File '{file_path}' does not exist. Creating file.")
         with open(file_path, 'w') as f:
-            f.write("Test content.")
-        print(f"File '{file_path}' created.")
+            f.write("0")  # Initialize with a valid integer value.
+        print(f"File '{file_path}' created with initial value '0'.")
 
 if __name__ == "__main__":
     check_file_creation_and_permissions()
