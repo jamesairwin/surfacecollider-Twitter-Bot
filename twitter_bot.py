@@ -50,14 +50,18 @@ def fetch_new_entries(cursor, last_entry_id):
 
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
-    # Normalize text to NFKD format to handle special characters
+    # Normalize the text to NFKD to handle special characters
     normalized_text = unicodedata.normalize('NFKD', text)
-    
-    # Encode to ASCII ignoring non-ASCII characters and then decode back to string
+
+    # Encode the text to ASCII, ignoring non-ASCII characters, then decode it back
     ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
+
+    # Replace common special characters with their standard counterparts
+    cleaned_text = re.sub(r'[“”]', '"', ascii_text)  # Replace fancy quotes with standard quotes
+    cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes with standard apostrophes
     
-    # Remove any remaining unwanted characters
-    cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', ascii_text)
+    # Optionally, remove any remaining unwanted characters
+    cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', cleaned_text)
     
     # Print the cleaned text for debugging
     logging.debug(f"Cleaned text: {cleaned_text}")
@@ -147,8 +151,9 @@ def run_bot():
             db_conn.close()
             return
 
+        # Clean the comment and debug the cleaned text
         cleaned_comment = clean_text(latest_entry['comment'])
-        logging.debug(f"Cleaned comment: {cleaned_comment}")  # Debug cleaned comment
+        logging.debug(f"Cleaned comment: {cleaned_comment}")
 
         tweet_content = f"New entry added: {cleaned_comment}"
         chunks = split_text_into_chunks(tweet_content)
