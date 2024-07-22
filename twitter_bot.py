@@ -119,6 +119,10 @@ def run_bot():
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
         logging.debug(f"New entries fetched: {new_entries}")
+
+        if not new_entries:
+            logging.info("No new entries to process.")
+            return
         
         for entry in new_entries:
             tweet_content = f"New entry added: {entry['comment']}"
