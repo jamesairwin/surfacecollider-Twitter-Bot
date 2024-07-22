@@ -7,6 +7,10 @@ import re
 from tweepy.errors import TweepyException
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+import logging
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Load environment variables from .env file
 load_dotenv()
@@ -72,14 +76,14 @@ def post_tweet(client, chunk):
     while True:
         try:
             client.create_tweet(text=chunk)
-            print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
+            logging.info(f"Posted tweet: {chunk[:30]}...")  # Log the beginning of the tweet for confirmation
             return True
         except TweepyException as e:
             if '429' in str(e):
-                print("Rate limit exceeded. Waiting for 15 minutes...")
+                logging.warning("Rate limit exceeded. Waiting for 15 minutes...")
                 time.sleep(15 * 60)  # Wait for 15 minutes
             else:
-                print(f"An error occurred: {e}")
+                logging.error(f"An error occurred: {e}")
                 return False
 
 # Load the last processed entry ID from the file
@@ -100,8 +104,8 @@ def run_bot():
     tweet_count = 0
     reset_time = datetime.now() + timedelta(days=1)  # Reset in 24 hours
 
-    print(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
-    print(f"Current reset time: {reset_time}")
+    logging.info(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
+    logging.info(f"Current reset time: {reset_time}")
 
     client = None
 
@@ -121,13 +125,15 @@ def run_bot():
         
         # Load the last processed entry ID
         last_entry_id = load_last_entry_id()
+        logging.debug(f"Loaded last entry ID: {last_entry_id}")
         
         # Fetch the latest entry from the database
         latest_entry = fetch_latest_entry(cursor)
-        
+        logging.debug(f"Fetched latest entry: {latest_entry}")
+
         # If no entries in the database or the latest entry is the same as the last processed one, exit
         if not latest_entry or (last_entry_id and latest_entry['id'] == last_entry_id):
-            print("No new entries to process.")
+            logging.info("No new entries to process.")
             cursor.close()
             db_conn.close()
             return
@@ -142,25 +148,26 @@ def run_bot():
                 if now >= reset_time:
                     tweet_count = 0
                     reset_time = now + timedelta(days=1)
-                    print(f"Tweet limit reset. New reset time: {reset_time}")
+                    logging.info(f"Tweet limit reset. New reset time: {reset_time}")
                 else:
                     wait_time = (reset_time - now).total_seconds()
-                    print(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
+                    logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
                     time.sleep(wait_time)
 
             if post_tweet(client, chunk):
                 tweet_count += 1
-                print(f"Tweet count: {tweet_count}")  # Print tweet count
+                logging.info(f"Tweet count: {tweet_count}")  # Log tweet count
                 time.sleep(1)  # To avoid hitting rate limits
 
         # Update the last processed entry ID
         save_last_entry_id(latest_entry['id'])
+        logging.info(f"Updated last entry ID to {latest_entry['id']}")
 
         cursor.close()
         db_conn.close()
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        logging.error(f"An error occurred: {e}")
 
 if __name__ == "__main__":
     run_bot()
