@@ -1,5 +1,3 @@
-import unicodedata
-import re
 import mysql.connector
 import tweepy
 import os
@@ -26,7 +24,7 @@ db_config = {
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
     'database': os.getenv('DB_DATABASE'),
-    'charset': 'latin1'  # Ensure this is set to latin1
+    'charset': 'latin1'  # Set charset to latin1
 }
 
 # Connect to the MySQL database
@@ -46,36 +44,6 @@ def fetch_new_entries(cursor, last_entry_id):
     query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
     cursor.execute(query, (last_entry_id,))
     return cursor.fetchall()
-
-# Convert Latin-1 bytes to UTF-8 string
-def convert_latin1_to_unicode(text):
-    if isinstance(text, bytes):
-        return text.decode('latin1')
-    return text
-
-# Convert Unicode text to ASCII, ignoring non-ASCII characters
-def convert_unicode_to_ascii(text):
-    # Normalize Unicode text to NFC form and encode to ASCII
-    normalized_text = unicodedata.normalize('NFC', text)
-    ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
-    
-    # Replace multiple spaces with a single space and strip leading/trailing spaces
-    cleaned_text = re.sub(r'\s+', ' ', ascii_text).strip()
-    
-    return cleaned_text
-
-# Clean and process the text
-def clean_text(text):
-    # Convert from Latin-1 to Unicode
-    text = convert_latin1_to_unicode(text)
-    
-    # Convert from Unicode to ASCII
-    ascii_text = convert_unicode_to_ascii(text)
-    
-    # Debug logging
-    logging.debug(f"Cleaned text: {ascii_text}")
-    
-    return ascii_text
 
 # Split the text into chunks of 140 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=140):
@@ -152,8 +120,7 @@ def run_bot():
         new_entries = fetch_new_entries(cursor, last_entry_id)
         
         for entry in new_entries:
-            cleaned_comment = clean_text(entry['comment'])
-            tweet_content = f"New entry added: {cleaned_comment}"
+            tweet_content = f"New entry added: {entry['comment']}"
             chunks = split_text_into_chunks(tweet_content)
 
             for chunk in chunks:
