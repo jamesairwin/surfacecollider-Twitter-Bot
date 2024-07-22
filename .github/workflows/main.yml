@@ -33,6 +33,13 @@ jobs:
         echo $PATH
       shell: bash
 
+    - name: Debug environment
+      run: |
+        python --version
+        which python
+        echo $PATH
+      shell: bash
+
     - name: Check file creation and permissions
       run: |
         python check_file_permissions.py
