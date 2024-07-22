@@ -41,9 +41,12 @@ def fetch_latest_entry(cursor):
 
 # Fetch all new entries from the database since the last processed ID
 def fetch_new_entries(cursor, last_entry_id):
+    logging.debug(f"Fetching new entries with ID greater than {last_entry_id}")
     query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
     cursor.execute(query, (last_entry_id,))
-    return cursor.fetchall()
+    new_entries = cursor.fetchall()
+    logging.debug(f"Fetched {len(new_entries)} new entries.")
+    return new_entries
 
 # Split the text into chunks of 140 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=140):
@@ -118,12 +121,13 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
-        logging.debug(f"New entries fetched: {new_entries}")
+        cursor.close()
+        db_conn.close()
 
         if not new_entries:
             logging.info("No new entries to process.")
             return
-        
+
         for entry in new_entries:
             tweet_content = f"New entry added: {entry['comment']}"
             logging.debug(f"Tweet content: {tweet_content}")
@@ -152,10 +156,7 @@ def run_bot():
                     logging.debug(f"Tweet failed: {chunk[:30]}...")
 
             last_entry_id = entry['id']
-        
-        cursor.close()
-        db_conn.close()
-    
+
     except Exception as e:
         logging.error(f"An error occurred: {e}")
 
