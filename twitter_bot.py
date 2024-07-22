@@ -1,10 +1,10 @@
+import time
 import os
 import mysql.connector
 import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
-from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -26,7 +26,12 @@ db_config = {
 
 # Connect to the MySQL database
 def get_db_connection():
-    return mysql.connector.connect(**db_config)
+    try:
+        print("Connecting to the database...")
+        return mysql.connector.connect(**db_config)
+    except mysql.connector.Error as err:
+        print(f"Error connecting to database: {err}")
+        raise
 
 # Fetch the latest entry from the database
 def fetch_latest_entry(cursor):
@@ -70,11 +75,11 @@ def post_tweet(client, chunk):
         print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
         return True
     except TweepyException as e:
+        print(f"Exception during tweet post: {e}")
         if '429' in str(e):
             print("Rate limit exceeded. Stopping the script.")
             return False
         else:
-            print(f"An error occurred: {e}")
             return False
 
 # Function to read the last entry ID from a file
@@ -93,15 +98,27 @@ def read_last_entry_id(file_path):
 
 # Function to write the last entry ID to a file
 def write_last_entry_id(file_path, last_entry_id):
-    with open(file_path, 'w') as file:
-        file.write(str(last_entry_id))
-    print(f"Updated last processed entry ID to: {last_entry_id}")
+    try:
+        with open(file_path, 'w') as file:
+            file.write(str(last_entry_id))
+        print(f"Updated last processed entry ID to: {last_entry_id}")
+    except IOError as e:
+        print(f"Error writing to file: {e}")
 
 # Main function to run the bot
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
     last_entry_id_file = "last_entry_id.txt"
+
+    # Initialize the Tweepy client
+    client = tweepy.Client(
+        bearer_token=API_KEY, 
+        consumer_key=API_KEY, 
+        consumer_secret=API_SECRET_KEY, 
+        access_token=ACCESS_TOKEN, 
+        access_token_secret=ACCESS_TOKEN_SECRET
+    )
 
     # Read the last processed entry ID from file
     last_entry_id = read_last_entry_id(last_entry_id_file)
@@ -138,6 +155,8 @@ def run_bot():
     
     except Exception as e:
         print(f"An error occurred: {e}")
+        if 'db_conn' in locals():
+            db_conn.close()
 
 if __name__ == "__main__":
     run_bot()
