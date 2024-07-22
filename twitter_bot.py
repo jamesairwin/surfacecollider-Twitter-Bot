@@ -94,6 +94,7 @@ def save_last_entry_id(entry_id):
     with open(LAST_ENTRY_ID_FILE, 'w') as file:
         file.write(str(entry_id))
 
+# Main function to run the bot
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
@@ -148,3 +149,6 @@ def run_bot():
 
     except Exception as e:
         print(f"An error occurred: {e}")
+
+if __name__ == "__main__":
+    run_bot()
