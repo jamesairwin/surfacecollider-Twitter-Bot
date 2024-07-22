@@ -79,7 +79,9 @@ def post_tweet(client, chunk):
 
 # Function to read the last entry ID from a file
 def read_last_entry_id(file_path):
+    print(f"Attempting to read last entry ID from file: {file_path}")
     if os.path.exists(file_path):
+        print("File exists.")
         with open(file_path, 'r') as file:
             content = file.read().strip()
             if content:
@@ -93,6 +95,7 @@ def read_last_entry_id(file_path):
 
 # Function to write the last entry ID to a file
 def write_last_entry_id(file_path, last_entry_id):
+    print(f"Attempting to write last entry ID to file: {file_path}")
     with open(file_path, 'w') as file:
         file.write(str(last_entry_id))
     print(f"Updated last processed entry ID to: {last_entry_id}")
