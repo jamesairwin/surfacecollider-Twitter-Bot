@@ -46,6 +46,7 @@ def fetch_new_entries(cursor, last_entry_id):
     cursor.execute(query, (last_entry_id,))
     new_entries = cursor.fetchall()
     logging.debug(f"Fetched {len(new_entries)} new entries.")
+    logging.debug(f"New entries: {new_entries}")
     return new_entries
 
 # Split the text into chunks of 140 characters, at natural whitespace intervals
@@ -103,7 +104,7 @@ def run_bot():
         cursor = db_conn.cursor(dictionary=True)
         latest_entry = fetch_latest_entry(cursor)
         last_entry_id = latest_entry['id'] if latest_entry else 0
-        logging.debug(f"Last entry ID: {last_entry_id}")
+        logging.debug(f"Last entry ID from latest entry: {last_entry_id}")
         cursor.close()
         db_conn.close()
     except Exception as e:
@@ -120,6 +121,7 @@ def run_bot():
     try:
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
+        
         new_entries = fetch_new_entries(cursor, last_entry_id)
         cursor.close()
         db_conn.close()
@@ -155,7 +157,9 @@ def run_bot():
                 else:
                     logging.debug(f"Tweet failed: {chunk[:30]}...")
 
+            # Update the last processed ID
             last_entry_id = entry['id']
+            logging.debug(f"Updated last entry ID to: {last_entry_id}")
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
