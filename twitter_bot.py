@@ -8,6 +8,7 @@ from tweepy.errors import TweepyException
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 import logging
+from html import unescape
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -50,16 +51,20 @@ def fetch_new_entries(cursor, last_entry_id):
 
 # Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
-    # Normalize text to NFKC format to handle special characters
+    # Decode HTML entities to handle characters like &quot;
+    text = unescape(text)
+    
+    # Normalize the text to NFKC (Normalization Form KC)
     normalized_text = unicodedata.normalize('NFKC', text)
     
     # Replace common special characters with their standard counterparts
+    # Replace fancy quotes and apostrophes
     cleaned_text = re.sub(r'[“”]', '"', normalized_text)  # Replace fancy quotes with standard quotes
     cleaned_text = re.sub(r"[‘’]", "'", cleaned_text)  # Replace fancy apostrophes with standard apostrophes
     
-    # Optional: Remove unwanted characters and extra spaces
+    # Optionally, remove any remaining unwanted characters and extra spaces
     cleaned_text = re.sub(r'[^\x00-\x7F]+', '', cleaned_text)  # Remove non-ASCII characters
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()  # Replace multiple spaces with single space
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()  # Replace multiple spaces with a single space
     
     # Print the cleaned text for debugging
     logging.debug(f"Cleaned text: {cleaned_text}")
