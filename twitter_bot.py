@@ -5,7 +5,7 @@ import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
-from datetime import datetime, timedelta
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -26,7 +26,11 @@ db_config = {
 }
 
 def get_db_connection():
-    return mysql.connector.connect(**db_config)
+    try:
+        return mysql.connector.connect(**db_config)
+    except mysql.connector.Error as err:
+        print(f"Error connecting to database: {err}")
+        raise
 
 def fetch_latest_entry(cursor):
     query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
@@ -86,8 +90,11 @@ def read_last_entry_id(file_path):
         return 0
 
 def write_last_entry_id(file_path, last_entry_id):
-    with open(file_path, 'w') as f:
-        f.write(str(last_entry_id))
+    try:
+        with open(file_path, 'w') as f:
+            f.write(str(last_entry_id))
+    except IOError as e:
+        print(f"Error writing to file: {e}")
 
 def run_bot():
     last_entry_id_file = 'last_entry_id.txt'
@@ -101,7 +108,6 @@ def run_bot():
     print(f"Last processed entry ID: {last_entry_id}")
 
     try:
-        # Connect to the database and fetch new entries
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         new_entries = fetch_new_entries(cursor, last_entry_id)
@@ -126,12 +132,12 @@ def run_bot():
             for chunk in chunks:
                 if tweet_count >= tweet_limit:
                     print(f"Tweet limit reached. Exiting script.")
-                    return  # Exit the script
+                    return
 
                 success = post_tweet(client, chunk)
                 if not success:
                     print("Failed to post tweet. Stopping script.")
-                    return  # Exit the script
+                    return
 
                 tweet_count += 1
                 print(f"Tweet count: {tweet_count}")  # Print tweet count
