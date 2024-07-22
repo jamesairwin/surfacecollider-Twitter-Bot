@@ -5,6 +5,7 @@ import tweepy
 import unicodedata
 import re
 from tweepy.errors import TweepyException
+from datetime import datetime
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -24,7 +25,6 @@ db_config = {
     'database': os.getenv('DB_DATABASE')
 }
 
-# Connect to the MySQL database
 def get_db_connection():
     try:
         print("Connecting to the database...")
@@ -33,26 +33,22 @@ def get_db_connection():
         print(f"Error connecting to database: {err}")
         raise
 
-# Fetch the latest entry from the database
 def fetch_latest_entry(cursor):
     query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
     cursor.execute(query)
     return cursor.fetchone()
 
-# Fetch all new entries from the database since the last processed ID
 def fetch_new_entries(cursor, last_entry_id):
     query = "SELECT * FROM comments WHERE id > %s ORDER BY id ASC"
     cursor.execute(query, (last_entry_id,))
     return cursor.fetchall()
 
-# Clean the text to convert to regular characters, numbers or punctuation
 def clean_text(text):
     normalized_text = unicodedata.normalize('NFKD', text)
     ascii_text = normalized_text.encode('ascii', 'ignore').decode('ascii')
     cleaned_text = re.sub(r'[^a-zA-Z0-9\s\.,!?\'\"-]', '', ascii_text)
     return cleaned_text
 
-# Split the text into chunks of 140 characters, at natural whitespace intervals
 def split_text_into_chunks(text, chunk_size=140):
     words = text.split()
     chunks = []
@@ -68,21 +64,26 @@ def split_text_into_chunks(text, chunk_size=140):
     chunks.append(chunk)
     return chunks
 
-# Post a tweet
-def post_tweet(client, chunk):
+def post_tweet(client, chunk, retry_count=0):
     try:
         client.create_tweet(text=chunk)
         print(f"Posted tweet: {chunk[:30]}...")  # Print the beginning of the tweet for confirmation
         return True
     except TweepyException as e:
-        print(f"Exception during tweet post: {e}")
         if '429' in str(e):
-            print("Rate limit exceeded. Stopping the script.")
-            return False
+            if retry_count < 5:  # Limit the number of retries
+                reset_time = int(e.response.headers.get('x-rate-limit-reset', time.time() + 15 * 60))
+                wait_time = max(reset_time - time.time(), 15 * 60)
+                print(f"Rate limit exceeded. Waiting for {wait_time / 60:.2f} minutes before retrying.")
+                time.sleep(wait_time)
+                return post_tweet(client, chunk, retry_count + 1)
+            else:
+                print("Rate limit exceeded too many times. Stopping the script.")
+                return False
         else:
+            print(f"An error occurred: {e}")
             return False
 
-# Function to read the last entry ID from a file
 def read_last_entry_id(file_path):
     if os.path.exists(file_path):
         with open(file_path, 'r') as file:
@@ -96,7 +97,6 @@ def read_last_entry_id(file_path):
         print("File does not exist.")
         return None
 
-# Function to write the last entry ID to a file
 def write_last_entry_id(file_path, last_entry_id):
     try:
         with open(file_path, 'w') as file:
@@ -105,7 +105,6 @@ def write_last_entry_id(file_path, last_entry_id):
     except IOError as e:
         print(f"Error writing to file: {e}")
 
-# Main function to run the bot
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
