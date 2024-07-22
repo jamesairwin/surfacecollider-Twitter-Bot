@@ -99,6 +99,7 @@ def run_bot():
 
     try:
         last_entry_id = read_last_entry_id()
+        print(f"Last processed entry ID: {last_entry_id}")
         if last_entry_id is None:
             db_conn = get_db_connection()
             cursor = db_conn.cursor(dictionary=True)
@@ -106,6 +107,7 @@ def run_bot():
             last_entry_id = latest_entry['id'] if latest_entry else 0
             cursor.close()
             db_conn.close()
+            print(f"Latest entry ID from DB: {last_entry_id}")
 
         client = tweepy.Client(
             bearer_token=API_KEY, 
@@ -114,6 +116,7 @@ def run_bot():
             access_token=ACCESS_TOKEN, 
             access_token_secret=ACCESS_TOKEN_SECRET
         )
+        print("Twitter client initialized successfully.")
     except Exception as e:
         print(f"Error initializing the bot: {e}")
         return
@@ -123,6 +126,7 @@ def run_bot():
             db_conn = get_db_connection()
             cursor = db_conn.cursor(dictionary=True)
             new_entries = fetch_new_entries(cursor, last_entry_id)
+            print(f"Fetched {len(new_entries)} new entries from DB.")
 
             for entry in new_entries:
                 if tweet_count >= tweet_limit:
@@ -145,13 +149,16 @@ def run_bot():
 
                 last_entry_id = entry['id']
                 write_last_entry_id(last_entry_id)
+                print(f"Updated last_entry_id to {last_entry_id}")
 
             cursor.close()
             db_conn.close()
+            print("DB connection closed.")
 
         except Exception as e:
             print(f"An error occurred: {e}")
 
+        print("Sleeping for 5 minutes.")
         time.sleep(300)  # Check for new entries every 5 minutes
 
 if __name__ == "__main__":
