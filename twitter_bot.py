@@ -76,9 +76,13 @@ def split_data_into_chunks(data, chunk_size=280):
 def calculate_tweets_made_in_last_24_hours():
     now = datetime.now(timezone.utc)
     since_time = now - timedelta(days=1)
-    tweets = api_v1.user_timeline(count=100)
-    recent_tweets = [tweet for tweet in tweets if tweet.created_at > since_time]
-    return len(recent_tweets)
+    try:
+        tweets = client.get_users_tweets(id=client.get_me().data.id, start_time=since_time.isoformat(), max_results=100)
+        recent_tweets = tweets.data if tweets.data else []
+        return len(recent_tweets)
+    except tweepy.TweepyException as e:
+        print(f"Error fetching tweets: {e}")
+        return 0
 
 def calculate_time_until_post_limit_reset():
     now = datetime.now(timezone.utc)
