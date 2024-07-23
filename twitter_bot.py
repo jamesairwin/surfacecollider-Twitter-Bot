@@ -12,28 +12,22 @@ API_SECRET_KEY = os.getenv('API_SECRET_KEY')
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
 
-# MySQL database credentials
-DB_HOST = os.getenv('DB_HOST')
-DB_USER = os.getenv('DB_USER')
-DB_PASSWORD = os.getenv('DB_PASSWORD')
-DB_NAME = os.getenv('DB_NAME')
-
 # Authenticate to Twitter
 auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
 api = tweepy.API(auth)
 
-# Connect to MySQL database
-try:
-    db = mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
-    cursor = db.cursor()
-except mysql.connector.Error as err:
-    print(f"Error: {err}")
-    exit(1)
+# MySQL database connection
+db_config = {
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_DATABASE'),
+    'charset': 'latin1'  # Set charset to latin1
+}
+
+# Connect to the MySQL database
+def get_db_connection():
+    return mysql.connector.connect(**db_config)
 
 # File to store the last fetched entry ID
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
