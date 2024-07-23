@@ -46,7 +46,7 @@ def fetch_new_entries(cursor, last_tweeted_id):
     cursor.execute(query)
     return cursor.fetchall()
 
-def split_text_into_chunks(text, chunk_size=140):
+def split_text_into_chunks(text, chunk_size=280):
     if not text:
         return []
     words = text.split()
