@@ -33,17 +33,6 @@ jobs:
         echo $PATH
       shell: bash
 
-    - name: Debug environment
-      run: |
-        python --version
-        which python
-        echo $PATH
-      shell: bash
-
-    - name: Check file creation and permissions
-      run: |
-        python check_file_permissions.py
-
     - name: Run Twitter Bot
       env:
         API_KEY: ${{ secrets.API_KEY }}
