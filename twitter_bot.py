@@ -40,7 +40,7 @@ def fetch_latest_entry(cursor):
     return result
 
 # Split the text into chunks of 140 characters, at natural whitespace intervals
-def split_text_into_chunks(text, chunk_size=140):
+def split_text_into_chunks(text, chunk_size=280):
     words = text.split()
     chunks = []
     chunk = words.pop(0)
