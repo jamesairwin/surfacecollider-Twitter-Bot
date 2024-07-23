@@ -5,6 +5,10 @@ import mysql.connector
 import os
 import time
 from datetime import datetime, timezone, timedelta
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Twitter API credentials
 API_KEY = os.getenv('API_KEY')
