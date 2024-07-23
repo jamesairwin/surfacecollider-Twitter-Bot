@@ -96,7 +96,8 @@ def tweet_chunks(chunks):
         print("Reached tweet limit for the last 24 hours.")
 
 def main():
-    db, cursor = get_db_connection()
+    db = get_db_connection()
+    cursor = db.cursor()
     data = fetch_next_database_entry_to_tweet(cursor)
     if data:
         chunks = split_data_into_chunks(data)
