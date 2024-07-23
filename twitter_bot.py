@@ -44,7 +44,7 @@ def fetch_next_database_entry_to_tweet(cursor):
         with open(LAST_ENTRY_FILE, 'w') as file:
             file.write('0')
 
-    query = f"SELECT id, comment FROM comments WHERE id > {last_entry_fetched} ORDER BY id ASC LIMIT 1"
+    query = f"SELECT id, comment FROM comments WHERE id > {last_entry_fetched} ORDER BY id DESC LIMIT 1"
     print(f"Executing query: {query}")  # Debug print
     cursor.execute(query)
     entry = cursor.fetchone()
