@@ -24,32 +24,27 @@ db_config = {
     'password': os.getenv('DB_PASSWORD'),
     'host': os.getenv('DB_HOST'),
     'database': os.getenv('DB_DATABASE'),
-    'charset': 'latin1'
+    'charset': 'latin1'  # Set charset to latin1
 }
 
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
-def load_last_tweeted_entry(cursor):
-    query = "SELECT last_tweeted_id FROM tweet_tracker WHERE id = 1"
-    cursor.execute(query)
+def fetch_last_tweeted_id(cursor):
+    cursor.execute("SELECT last_tweeted_id FROM tweet_tracker ORDER BY id DESC LIMIT 1")
     result = cursor.fetchone()
-    if result:
-        return result[0]
-    else:
-        cursor.execute("INSERT INTO tweet_tracker (id, last_tweeted_id) VALUES (1, 0)")
-        return 0
+    return result['last_tweeted_id'] if result else 0
 
-def save_last_tweeted_entry(cursor, connection, entry_id):
-    cursor.execute("UPDATE tweet_tracker SET last_tweeted_id = %s WHERE id = 1", (entry_id,))
-    connection.commit()
+def update_last_tweeted_id(cursor, last_tweeted_id):
+    cursor.execute(
+        "INSERT INTO tweet_tracker (last_tweeted_id) VALUES (%s) ON DUPLICATE KEY UPDATE last_tweeted_id = VALUES(last_tweeted_id)",
+        (last_tweeted_id,)
+    )
 
-def fetch_latest_unprocessed_entry(cursor, last_tweeted_id):
-    query = f"SELECT * FROM comments WHERE id > {last_tweeted_id} ORDER BY id ASC LIMIT 1"
+def fetch_new_entries(cursor, last_tweeted_id):
+    query = f"SELECT id, comment FROM comments WHERE id > {last_tweeted_id} ORDER BY id ASC"
     cursor.execute(query)
-    result = cursor.fetchone()
-    logging.debug(f"Fetched entry: {result}")
-    return result
+    return cursor.fetchall()
 
 def split_text_into_chunks(text, chunk_size=140):
     words = text.split()
@@ -78,7 +73,7 @@ def post_tweet(client, chunk):
         except tweepy.errors.TweepyException as e:
             if '429' in str(e):
                 logging.warning("Rate limit exceeded. Exiting...")
-                exit(1)
+                exit(1)  # Exit the script immediately
             else:
                 logging.error(f"An error occurred: {e}")
                 return False
@@ -92,7 +87,7 @@ def post_tweet(client, chunk):
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
-    reset_time = datetime.now() + timedelta(days=1)
+    reset_time = datetime.now() + timedelta(days=1)  # Reset in 24 hours
 
     logging.info(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
     logging.info(f"Current reset time: {reset_time}")
@@ -100,17 +95,13 @@ def run_bot():
     try:
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
-        last_tweeted_id = load_last_tweeted_entry(cursor)
-        logging.info(f"Last tweeted entry ID: {last_tweeted_id}")
-
-        entry = fetch_latest_unprocessed_entry(cursor, last_tweeted_id)
-        cursor.close()
-        db_conn.close()
+        last_tweeted_id = fetch_last_tweeted_id(cursor)
+        entries = fetch_new_entries(cursor, last_tweeted_id)
     except Exception as e:
         logging.error(f"Error initializing the bot: {e}")
         return
 
-    if not entry:
+    if not entries:
         logging.info("No new entries found in the database.")
         return
 
@@ -122,44 +113,45 @@ def run_bot():
     )
 
     try:
-        tweet_content = f"New entry added: {entry['comment']}"
-        logging.debug(f"Tweet content: {tweet_content}")
-        chunks = split_text_into_chunks(tweet_content)
-        logging.debug(f"Tweet chunks: {chunks}")
+        for entry in entries:
+            entry_id, comment = entry
+            tweet_content = f"New entry added: {comment}"
+            logging.debug(f"Tweet content: {tweet_content}")
+            chunks = split_text_into_chunks(tweet_content)
+            logging.debug(f"Tweet chunks: {chunks}")
 
-        for chunk in chunks:
-            if tweet_count >= tweet_limit:
-                now = datetime.now()
-                if now >= reset_time:
-                    tweet_count = 0
-                    reset_time = now + timedelta(days=1)
-                    logging.info(f"Tweet limit reset. New reset time: {reset_time}")
+            for chunk in chunks:
+                if tweet_count >= tweet_limit:
+                    now = datetime.now()
+                    if now >= reset_time:
+                        tweet_count = 0
+                        reset_time = now + timedelta(days=1)
+                        logging.info(f"Tweet limit reset. New reset time: {reset_time}")
+                    else:
+                        wait_time = (reset_time - now).total_seconds()
+                        logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
+                        time.sleep(wait_time)
+
+                logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
+                if post_tweet(client, chunk):
+                    tweet_count += 1
+                    logging.info(f"Tweet count: {tweet_count}")
+                    logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
+                    time.sleep(1)  # To avoid hitting rate limits
                 else:
-                    wait_time = (reset_time - now).total_seconds()
-                    logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                    time.sleep(wait_time)
+                    logging.debug(f"Tweet failed: {chunk[:30]}...")
 
-            logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
-            if post_tweet(client, chunk):
-                tweet_count += 1
-                logging.info(f"Tweet count: {tweet_count}")
-                logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
-                time.sleep(1)
-            else:
-                logging.debug(f"Tweet failed: {chunk[:30]}...")
-
-        try:
-            db_conn = get_db_connection()
-            cursor = db_conn.cursor()
-            save_last_tweeted_entry(cursor, db_conn, entry['id'])
-            cursor.close()
-            db_conn.close()
-            logging.debug(f"Updated last tweeted ID to: {entry['id']}")
-        except Exception as e:
-            logging.error(f"Error updating the last tweeted ID: {e}")
+            # Update the last_tweeted_id in the database
+            update_last_tweeted_id(cursor, entry_id)
+            db_conn.commit()
+            logging.debug(f"Updated last_tweeted_id to: {entry_id}")
 
     except Exception as e:
         logging.error(f"An error occurred: {e}")
+
+    finally:
+        cursor.close()
+        db_conn.close()
 
 if __name__ == "__main__":
     run_bot()
