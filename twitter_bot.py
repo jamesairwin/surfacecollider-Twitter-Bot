@@ -23,7 +23,7 @@ if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET and 
 
 # Authenticate to Twitter using OAuth1 for posting tweets
 auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-api_v1 = tweepy.API(auth)
+api_v2 = tweepy.API(auth)
 
 # Authenticate to Twitter using Bearer Token for API v2
 client = tweepy.Client(bearer_token=BEARER_TOKEN)
