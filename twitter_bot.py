@@ -8,14 +8,14 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Fetch credentials from environment variables
+# Ensure you have correct keys and tokens in the .env file
 API_KEY = os.getenv('API_KEY')
 API_SECRET_KEY = os.getenv('API_SECRET_KEY')
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
 BEARER_TOKEN = os.getenv('BEARER_TOKEN')  # For API v2
 
-# Check if any credential is missing
+# Verify all variables are present and not None
 if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET and BEARER_TOKEN):
     raise ValueError("One or more Twitter API credentials are missing. Check your environment variables.")
 
