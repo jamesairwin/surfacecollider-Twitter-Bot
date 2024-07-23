@@ -23,14 +23,17 @@ auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TO
 api = tweepy.API(auth)
 
 # Connect to MySQL database
-db = mysql.connector.connect(
-    host=DB_HOST,
-    user=DB_USER,
-    password=DB_PASSWORD,
-    database=DB_NAME
-)
-
-cursor = db.cursor()
+try:
+    db = mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+    cursor = db.cursor()
+except mysql.connector.Error as err:
+    print(f"Error: {err}")
+    exit(1)
 
 # File to store the last fetched entry ID
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
