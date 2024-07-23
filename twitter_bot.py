@@ -4,7 +4,7 @@ import tweepy
 import mysql.connector
 import os
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone, timedelta
 
 # Twitter API credentials
 API_KEY = os.getenv('API_KEY')
@@ -77,7 +77,9 @@ def calculate_tweets_made_in_last_24_hours():
     now = datetime.now(timezone.utc)
     since_time = now - timedelta(days=1)
     try:
-        tweets = client.get_users_tweets(id=client.get_me().data.id, start_time=since_time.isoformat(), max_results=100)
+        # Fetch recent tweets using the Twitter API v2
+        user_id = client.get_me().data.id
+        tweets = client.get_users_tweets(id=user_id, start_time=since_time.isoformat(), max_results=100)
         recent_tweets = tweets.data if tweets.data else []
         return len(recent_tweets)
     except tweepy.TweepyException as e:
