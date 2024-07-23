@@ -1,5 +1,3 @@
-# twitter_bot.py
-
 import tweepy
 import mysql.connector
 import os
@@ -32,9 +30,9 @@ auth = tweepy.OAuth1UserHandler(
 # Create Tweepy API v1 object
 api_v1 = tweepy.API(auth)
 
-# Set up Tweepy API v2
+# Set up Tweepy API v2 authentication
 client = tweepy.Client(
-    bearer_token=os.getenv('BEARER_TOKEN'),  # For Tweepy v2, use bearer token
+    bearer_token=BEARER_TOKEN,
     consumer_key=API_KEY,
     consumer_secret=API_SECRET_KEY,
     access_token=ACCESS_TOKEN,
@@ -53,10 +51,6 @@ db_config = {
 # Connect to the MySQL database
 def get_db_connection():
     return mysql.connector.connect(**db_config)
-
-# Check if any credential is missing
-if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET):
-    raise ValueError("One or more Twitter API credentials are missing. Check your environment variables.")
 
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
 
@@ -126,8 +120,12 @@ def tweet_chunks(chunks):
     tweet_count = calculate_tweets_made_in_last_24_hours()
     if tweet_count < 50:
         for chunk in chunks:
-            api_v1.update_status(chunk)
-            time.sleep(2)  # To avoid hitting the rate limit
+            try:
+                api_v1.update_status(chunk)
+                print(f"Tweeted: {chunk}")
+                time.sleep(2)  # To avoid hitting the rate limit
+            except tweepy.TweepyException as e:
+                print(f"Error tweeting: {e}")
     else:
         print("Reached tweet limit for the last 24 hours.")
 
