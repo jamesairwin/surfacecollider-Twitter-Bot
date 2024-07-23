@@ -30,7 +30,7 @@ def get_db_connection():
     return mysql.connector.connect(**db_config)
 
 # Check if any credential is missing
-if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET and BEARER_TOKEN):
+if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET):
     raise ValueError("One or more Twitter API credentials are missing. Check your environment variables.")
 
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
