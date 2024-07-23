@@ -1,159 +1,110 @@
-import mysql.connector
+# twitter_bot.py
+
 import tweepy
+import mysql.connector
 import os
-import logging
 import time
 from datetime import datetime, timedelta
-from dotenv import load_dotenv
 
-# Configure logging
-logging.basicConfig(level=logging.DEBUG)
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Fetch credentials from environment variables
+# Twitter API credentials
 API_KEY = os.getenv('API_KEY')
 API_SECRET_KEY = os.getenv('API_SECRET_KEY')
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
 
-# MySQL database connection
-db_config = {
-    'user': os.getenv('DB_USER'),
-    'password': os.getenv('DB_PASSWORD'),
-    'host': os.getenv('DB_HOST'),
-    'database': os.getenv('DB_DATABASE'),
-    'charset': 'latin1'  # Set charset to latin1
-}
+# MySQL database credentials
+DB_HOST = os.getenv('DB_HOST')
+DB_USER = os.getenv('DB_USER')
+DB_PASSWORD = os.getenv('DB_PASSWORD')
+DB_NAME = os.getenv('DB_NAME')
 
-# Path to the file storing the last tweeted entry ID
-LAST_TWEETED_ID_FILE = 'last_tweeted_id.txt'
+# Authenticate to Twitter
+auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+api = tweepy.API(auth)
 
-def get_db_connection():
-    return mysql.connector.connect(**db_config)
+# Connect to MySQL database
+db = mysql.connector.connect(
+    host=DB_HOST,
+    user=DB_USER,
+    password=DB_PASSWORD,
+    database=DB_NAME
+)
 
-def fetch_latest_entry(cursor):
-    query = "SELECT * FROM comments ORDER BY id DESC LIMIT 1"
+cursor = db.cursor()
+
+# File to store the last fetched entry ID
+LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
+
+def fetch_next_database_entry_to_tweet():
+    last_entry_fetched = 0
+    if os.path.exists(LAST_ENTRY_FILE):
+        with open(LAST_ENTRY_FILE, 'r') as file:
+            last_entry_fetched = int(file.read().strip())
+    else:
+        with open(LAST_ENTRY_FILE, 'w') as file:
+            file.write('0')
+
+    query = f"SELECT id, text FROM tweets WHERE id > {last_entry_fetched} ORDER BY id ASC LIMIT 1"
     cursor.execute(query)
-    result = cursor.fetchone()
-    logging.debug(f"Raw data from database: {result}")
-    return result
+    entry = cursor.fetchone()
 
-def split_text_into_chunks(text, chunk_size=280):
-    words = text.split()
+    if entry:
+        entry_id, entry_text = entry
+        with open(LAST_ENTRY_FILE, 'w') as file:
+            file.write(str(entry_id))
+        return entry_text
+    return None
+
+def split_data_into_chunks(data, chunk_size=280):
+    words = data.split()
     chunks = []
-    chunk = words.pop(0)
-
+    chunk = ""
     for word in words:
         if len(chunk) + len(word) + 1 > chunk_size:
             chunks.append(chunk)
             chunk = word
         else:
-            chunk += ' ' + word
-
-    chunks.append(chunk)
+            if chunk:
+                chunk += " "
+            chunk += word
+    if chunk:
+        chunks.append(chunk)
     return chunks
 
-def post_tweet(client, chunk):
-    max_retries = 5
-    retries = 0
+def calculate_tweets_made_in_last_24_hours():
+    now = datetime.utcnow()
+    since_time = now - timedelta(days=1)
+    tweets = api.user_timeline(count=100)
+    recent_tweets = [tweet for tweet in tweets if tweet.created_at > since_time]
+    return len(recent_tweets)
 
-    while retries < max_retries:
-        try:
-            client.create_tweet(text=chunk)
-            logging.info(f"Posted tweet: {chunk[:30]}...")
-            return True
-        except tweepy.errors.TweepyException as e:
-            if '429' in str(e):
-                logging.warning("Rate limit exceeded. Exiting...")
-                exit(1)  # Exit the script immediately
-            else:
-                logging.error(f"An error occurred: {e}")
-                return False
-        except Exception as e:
-            logging.error(f"Unexpected error: {e}")
-            return False
+def calculate_time_until_post_limit_reset():
+    now = datetime.utcnow()
+    since_time = now - timedelta(days=1)
+    tweets = api.user_timeline(count=100)
+    recent_tweets = [tweet for tweet in tweets if tweet.created_at > since_time]
+    if recent_tweets:
+        oldest_tweet_time = min(tweet.created_at for tweet in recent_tweets)
+        reset_time = oldest_tweet_time + timedelta(days=1)
+        return (reset_time - now).total_seconds()
+    return 0
 
-    logging.error("Max retries reached. Unable to post tweet.")
-    return False
-
-def read_last_tweeted_id():
-    if os.path.exists(LAST_TWEETED_ID_FILE):
-        with open(LAST_TWEETED_ID_FILE, 'r') as file:
-            return int(file.read().strip())
-    return None
-
-def write_last_tweeted_id(tweet_id):
-    with open(LAST_TWEETED_ID_FILE, 'w') as file:
-        file.write(str(tweet_id))
-
-def run_bot():
-    tweet_limit = 50
-    tweet_count = 0
-    reset_time = datetime.now() + timedelta(days=1)  # Reset in 24 hours
-
-    logging.info(f"Starting bot. Tweet limit is {tweet_limit} per 24 hours.")
-    logging.info(f"Current reset time: {reset_time}")
-
-    try:
-        db_conn = get_db_connection()
-        cursor = db_conn.cursor(dictionary=True)
-        latest_entry = fetch_latest_entry(cursor)
-        cursor.close()
-        db_conn.close()
-    except Exception as e:
-        logging.error(f"Error initializing the bot: {e}")
-        return
-
-    if not latest_entry:
-        logging.info("No entries found in the database.")
-        return
-
-    last_tweeted_id = read_last_tweeted_id()
-    if last_tweeted_id == latest_entry['id']:
-        logging.info("Latest entry has already been tweeted.")
-        return
-
-    client = tweepy.Client(
-        consumer_key=API_KEY, 
-        consumer_secret=API_SECRET_KEY, 
-        access_token=ACCESS_TOKEN, 
-        access_token_secret=ACCESS_TOKEN_SECRET
-    )
-
-    try:
-        tweet_content = f"New entry added: {latest_entry['comment']}"
-        logging.debug(f"Tweet content: {tweet_content}")
-        chunks = split_text_into_chunks(tweet_content)
-        logging.debug(f"Tweet chunks: {chunks}")
-
+def tweet_chunks(chunks):
+    tweet_count = calculate_tweets_made_in_last_24_hours()
+    if tweet_count < 50:
         for chunk in chunks:
-            if tweet_count >= tweet_limit:
-                now = datetime.now()
-                if now >= reset_time:
-                    tweet_count = 0
-                    reset_time = now + timedelta(days=1)
-                    logging.info(f"Tweet limit reset. New reset time: {reset_time}")
-                else:
-                    wait_time = (reset_time - now).total_seconds()
-                    logging.info(f"Tweet limit reached. Waiting for {wait_time / 60:.2f} minutes.")
-                    time.sleep(wait_time)
+            api.update_status(chunk)
+            time.sleep(2)  # To avoid hitting the rate limit
+    else:
+        print("Reached tweet limit for the last 24 hours.")
 
-            logging.debug(f"Attempting to post tweet: {chunk[:30]}...")
-            if post_tweet(client, chunk):
-                tweet_count += 1
-                logging.info(f"Tweet count: {tweet_count}")
-                logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
-                time.sleep(1)  # To avoid hitting rate limits
-            else:
-                logging.debug(f"Tweet failed: {chunk[:30]}...")
+def main():
+    data = fetch_next_database_entry_to_tweet()
+    if data:
+        chunks = split_data_into_chunks(data)
+        tweet_chunks(chunks)
+    else:
+        print("No new entries to tweet.")
 
-        write_last_tweeted_id(latest_entry['id'])
-        logging.debug(f"Updated last tweeted ID to: {latest_entry['id']}")
-
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-
-if __name__ == "__main__":
-    run_bot()
+if __name__ == '__main__':
+    main()
