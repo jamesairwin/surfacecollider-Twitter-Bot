@@ -10,32 +10,28 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Twitter API credentials
+# Fetch credentials from environment variables
 API_KEY = os.getenv('API_KEY')
 API_SECRET_KEY = os.getenv('API_SECRET_KEY')
 ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
 ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
-BEARER_TOKEN = os.getenv('BEARER_TOKEN')
+
+# MySQL database connection
+db_config = {
+    'user': os.getenv('DB_USER'),
+    'password': os.getenv('DB_PASSWORD'),
+    'host': os.getenv('DB_HOST'),
+    'database': os.getenv('DB_DATABASE'),
+    'charset': 'latin1'  # Set charset to latin1
+}
+
+# Connect to the MySQL database
+def get_db_connection():
+    return mysql.connector.connect(**db_config)
 
 # Check if any credential is missing
 if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET and BEARER_TOKEN):
     raise ValueError("One or more Twitter API credentials are missing. Check your environment variables.")
-
-# Authenticate to Twitter using OAuth1 for posting tweets
-auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
-api_v1 = tweepy.API(auth)
-
-# Authenticate to Twitter using Bearer Token for API v2
-client = tweepy.Client(auth)
-
-def get_db_connection():
-    return mysql.connector.connect(
-        user=os.getenv('DB_USER'),
-        password=os.getenv('DB_PASSWORD'),
-        host=os.getenv('DB_HOST'),
-        database=os.getenv('DB_DATABASE'),
-        charset='latin1'
-    )
 
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
 
