@@ -107,6 +107,8 @@ def run_bot():
 
     if not entries:
         logging.info("No new entries found in the database.")
+        cursor.close()
+        db_conn.close()
         return
 
     client = tweepy.Client(
