@@ -33,7 +33,7 @@ def get_db_connection():
 def fetch_last_tweeted_id(cursor):
     cursor.execute("SELECT last_tweeted_id FROM tweet_tracker ORDER BY id DESC LIMIT 1")
     result = cursor.fetchone()
-    return result['last_tweeted_id'] if result else 0
+    return int(result['last_tweeted_id']) if result and result['last_tweeted_id'] is not None else 0
 
 def update_last_tweeted_id(cursor, last_tweeted_id):
     cursor.execute(
@@ -47,6 +47,8 @@ def fetch_new_entries(cursor, last_tweeted_id):
     return cursor.fetchall()
 
 def split_text_into_chunks(text, chunk_size=140):
+    if not text:
+        return []
     words = text.split()
     chunks = []
     chunk = words.pop(0)
@@ -96,7 +98,9 @@ def run_bot():
         db_conn = get_db_connection()
         cursor = db_conn.cursor(dictionary=True)
         last_tweeted_id = fetch_last_tweeted_id(cursor)
+        logging.info(f"Last tweeted ID fetched: {last_tweeted_id}")
         entries = fetch_new_entries(cursor, last_tweeted_id)
+        logging.info(f"Fetched entries: {entries}")
     except Exception as e:
         logging.error(f"Error initializing the bot: {e}")
         return
@@ -115,6 +119,7 @@ def run_bot():
     try:
         for entry in entries:
             entry_id, comment = entry
+            logging.debug(f"Processing entry ID: {entry_id}, Comment: {comment}")
             tweet_content = f"New entry added: {comment}"
             logging.debug(f"Tweet content: {tweet_content}")
             chunks = split_text_into_chunks(tweet_content)
