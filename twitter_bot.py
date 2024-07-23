@@ -7,10 +7,10 @@ import time
 from datetime import datetime, timedelta
 
 # Twitter API credentials
-API_KEY = os.getenv('API_KEY')
-API_SECRET_KEY = os.getenv('API_SECRET_KEY')
-ACCESS_TOKEN = os.getenv('ACCESS_TOKEN')
-ACCESS_TOKEN_SECRET = os.getenv('ACCESS_TOKEN_SECRET')
+API_KEY = os.getenv('TWITTER_API_KEY')
+API_SECRET_KEY = os.getenv('TWITTER_API_SECRET_KEY')
+ACCESS_TOKEN = os.getenv('TWITTER_ACCESS_TOKEN')
+ACCESS_TOKEN_SECRET = os.getenv('TWITTER_ACCESS_TOKEN_SECRET')
 
 # Authenticate to Twitter
 auth = tweepy.OAuth1UserHandler(API_KEY, API_SECRET_KEY, ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
@@ -32,7 +32,7 @@ def get_db_connection():
 # File to store the last fetched entry ID
 LAST_ENTRY_FILE = 'last_entry_fetched_ID.txt'
 
-def fetch_next_database_entry_to_tweet():
+def fetch_next_database_entry_to_tweet(cursor):
     last_entry_fetched = 0
     if os.path.exists(LAST_ENTRY_FILE):
         with open(LAST_ENTRY_FILE, 'r') as file:
@@ -96,12 +96,15 @@ def tweet_chunks(chunks):
         print("Reached tweet limit for the last 24 hours.")
 
 def main():
-    data = fetch_next_database_entry_to_tweet()
+    db, cursor = get_db_connection()
+    data = fetch_next_database_entry_to_tweet(cursor)
     if data:
         chunks = split_data_into_chunks(data)
         tweet_chunks(chunks)
     else:
         print("No new entries to tweet.")
+    cursor.close()
+    db.close()
 
 if __name__ == '__main__':
     main()
