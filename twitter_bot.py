@@ -118,7 +118,8 @@ def run_bot():
 
     try:
         for entry in entries:
-            entry_id, comment = entry
+            entry_id = entry['id']
+            comment = entry['comment']
             logging.debug(f"Processing entry ID: {entry_id}, Comment: {comment}")
             tweet_content = f"New entry added: {comment}"
             logging.debug(f"Tweet content: {tweet_content}")
