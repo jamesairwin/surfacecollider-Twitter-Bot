@@ -27,42 +27,41 @@ db_config = {
     'charset': 'latin1'  # Set charset to latin1
 }
 
+# Connect to the MySQL database
 def get_db_connection():
     return mysql.connector.connect(**db_config)
 
+# Fetch the last tweeted ID from the database
 def fetch_last_tweeted_id(cursor):
-    cursor.execute("SELECT last_tweeted_id FROM tweet_tracker ORDER BY id DESC LIMIT 1")
-    result = cursor.fetchone()
-    return int(result['last_tweeted_id']) if result and result['last_tweeted_id'] is not None else 0
-
-def update_last_tweeted_id(cursor, last_tweeted_id):
-    cursor.execute(
-        "INSERT INTO tweet_tracker (last_tweeted_id) VALUES (%s) ON DUPLICATE KEY UPDATE last_tweeted_id = VALUES(last_tweeted_id)",
-        (last_tweeted_id,)
-    )
-
-def fetch_new_entries(cursor, last_tweeted_id):
-    query = f"SELECT id, comment FROM comments WHERE id > {last_tweeted_id} ORDER BY id ASC"
+    query = "SELECT last_tweeted_id FROM tweet_tracker WHERE id = 1"
     cursor.execute(query)
-    return cursor.fetchall()
+    result = cursor.fetchone()
+    if result:
+        return result[0]
+    else:
+        return 0
 
-def split_text_into_chunks(text, chunk_size=140):
-    if not text:
-        return []
-    words = text.split()
+# Fetch new entries from the database
+def fetch_new_entries(cursor, last_tweeted_id):
+    query = "SELECT id, comment FROM comments WHERE id > %s ORDER BY id ASC"
+    cursor.execute(query, (last_tweeted_id,))
+    results = cursor.fetchall()
+    return results
+
+# Split the text into chunks of 280 characters (or less for long texts)
+def split_text_into_chunks(text, chunk_size=280):
     chunks = []
-    chunk = words.pop(0)
-
-    for word in words:
-        if len(chunk) + len(word) + 1 > chunk_size:
-            chunks.append(chunk)
-            chunk = word
-        else:
-            chunk += ' ' + word
-
-    chunks.append(chunk)
+    while len(text) > chunk_size:
+        # Find the last space within the chunk_size limit
+        split_pos = text.rfind(' ', 0, chunk_size)
+        if split_pos == -1:  # No space found
+            split_pos = chunk_size
+        chunks.append(text[:split_pos])
+        text = text[split_pos:].lstrip()  # Remove leading spaces
+    chunks.append(text)  # Append remaining text
     return chunks
 
+# Post a tweet
 def post_tweet(client, chunk):
     max_retries = 5
     retries = 0
@@ -86,6 +85,13 @@ def post_tweet(client, chunk):
     logging.error("Max retries reached. Unable to post tweet.")
     return False
 
+# Update the last tweeted ID in the database
+def update_last_tweeted_id(cursor, connection, new_id):
+    query = "UPDATE tweet_tracker SET last_tweeted_id = %s WHERE id = 1"
+    cursor.execute(query, (new_id,))
+    connection.commit()
+
+# Main function to run the bot
 def run_bot():
     tweet_limit = 50
     tweet_count = 0
@@ -150,8 +156,7 @@ def run_bot():
                     logging.debug(f"Tweet failed: {chunk[:30]}...")
 
             # Update the last_tweeted_id in the database
-            update_last_tweeted_id(cursor, entry_id)
-            db_conn.commit()
+            update_last_tweeted_id(cursor, db_conn, entry_id)
             logging.debug(f"Updated last_tweeted_id to: {entry_id}")
 
     except Exception as e:
