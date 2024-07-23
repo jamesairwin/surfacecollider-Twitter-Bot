@@ -19,15 +19,13 @@ BEARER_TOKEN = os.getenv('BEARER_TOKEN')  # For API v2
 if not (API_KEY and API_SECRET_KEY and ACCESS_TOKEN and ACCESS_TOKEN_SECRET and BEARER_TOKEN):
     raise ValueError("One or more Twitter API credentials are missing. Check your environment variables.")
 
-# Set up Tweepy API v1 authentication
+# Set up Tweepy API v1.1 authentication
 auth = tweepy.OAuth1UserHandler(
     API_KEY,
     API_SECRET_KEY,
     ACCESS_TOKEN,
     ACCESS_TOKEN_SECRET
 )
-
-# Create Tweepy API v1 object
 api_v1 = tweepy.API(auth)
 
 # Set up Tweepy API v2 authentication
@@ -121,6 +119,7 @@ def tweet_chunks(chunks):
     if tweet_count < 50:
         for chunk in chunks:
             try:
+                # Post tweet using API v1.1
                 api_v1.update_status(chunk)
                 print(f"Tweeted: {chunk}")
                 time.sleep(2)  # To avoid hitting the rate limit
