@@ -123,7 +123,7 @@ def run_bot():
             entry_id = entry['id']
             comment = entry['comment']
             logging.debug(f"Processing entry ID: {entry_id}, Comment: {comment}")
-            tweet_content = f"New entry added: {comment}"
+            tweet_content = f"{comment}"
             logging.debug(f"Tweet content: {tweet_content}")
             chunks = split_text_into_chunks(tweet_content)
             logging.debug(f"Tweet chunks: {chunks}")
