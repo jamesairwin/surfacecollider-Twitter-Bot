@@ -145,7 +145,7 @@ def run_bot():
                     tweet_count += 1
                     logging.info(f"Tweet count: {tweet_count}")
                     logging.debug(f"Tweet posted successfully: {chunk[:30]}...")
-                    time.sleep(1)  # To avoid hitting rate limits
+                    time.sleep(20)  # To avoid hitting rate limits
                 else:
                     logging.debug(f"Tweet failed: {chunk[:30]}...")
 
