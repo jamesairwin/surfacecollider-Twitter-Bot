@@ -63,8 +63,6 @@ def split_text_into_chunks(text, chunk_size=280):
     chunks.append(chunk)
     return chunks
 
-logging.info(f"Attempting to post: {chunk}")
-
 def post_tweet(client, chunk):
     max_retries = 5
     retries = 0
