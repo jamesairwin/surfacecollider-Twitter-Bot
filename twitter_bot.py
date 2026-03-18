@@ -63,27 +63,53 @@ def split_text_into_chunks(text, chunk_size=280):
     chunks.append(chunk)
     return chunks
 
+logging.info(f"Attempting to post: {chunk}")
+
 def post_tweet(client, chunk):
     max_retries = 5
     retries = 0
 
     while retries < max_retries:
         try:
-            client.create_tweet(text=chunk)
-            logging.info(f"Posted tweet: {chunk[:30]}...")
-            return True
-        except tweepy.errors.TweepyException as e:
-            if '429' in str(e):
-                logging.warning("Rate limit exceeded. Exiting...")
-                exit(1)  # Exit the script immediately
-            else:
-                logging.error(f"An error occurred: {e}")
-                return False
-        except Exception as e:
-            logging.error(f"Unexpected error: {e}")
-            return False
+            response = client.create_tweet(text=chunk)
 
-    logging.error("Max retries reached. Unable to post tweet.")
+            logging.info("✅ TWEET SUCCESS")
+            logging.info(f"Tweet text: {chunk}")
+            logging.info(f"Full response: {response}")
+
+            return True
+
+        except tweepy.errors.TweepyException as e:
+            retries += 1
+
+            logging.error("❌ TWEET FAILED (TweepyException)")
+            logging.error(f"Attempt: {retries}/{max_retries}")
+            logging.error(f"Error: {e}")
+            logging.error(f"Error type: {type(e)}")
+
+            # This sometimes exposes hidden API info
+            if hasattr(e, 'response') and e.response is not None:
+                logging.error(f"Status code: {e.response.status_code}")
+                logging.error(f"Response text: {e.response.text}")
+
+            # Handle rate limit
+            if '429' in str(e):
+                logging.warning("Rate limit hit. Exiting.")
+                return False
+
+            time.sleep(5)
+
+        except Exception as e:
+            retries += 1
+
+            logging.error("❌ UNEXPECTED ERROR")
+            logging.error(f"Attempt: {retries}/{max_retries}")
+            logging.error(f"Error: {e}")
+            logging.error(f"Type: {type(e)}")
+
+            time.sleep(5)
+
+    logging.error("❌ Max retries reached. Giving up.")
     return False
 
 def run_bot():
